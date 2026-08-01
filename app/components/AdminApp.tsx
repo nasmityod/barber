@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { apiError, isJsonObject, readJsonObject, stringArray } from "./api-json";
 import {
   BarChart3, Bell, CalendarDays, ChevronDown, CircleDollarSign, Clock3, Copy,
   LayoutDashboard, Menu, Plus, Scissors, Search, Settings, Sparkles,
@@ -17,6 +18,29 @@ type Appointment = {
 type Service = { id:string; name:string; category:string; durationMinutes:number; priceCents:number; active?:number };
 type Professional = { id:string; name:string; specialty:string; active?:number };
 type Catalog = { business:{name:string;slug:string;timezone:string;currency:string};services:Service[];professionals:Professional[] };
+
+function isAppointment(value: unknown): value is Appointment {
+  if (!isJsonObject(value)) return false;
+  return ["id", "date", "time", "endTime", "status", "source", "clientName", "phone", "serviceName", "professionalName"]
+    .every((key) => typeof value[key] === "string") && typeof value.totalCents === "number";
+}
+
+function isService(value: unknown): value is Service {
+  return isJsonObject(value) && typeof value.id === "string" && typeof value.name === "string" &&
+    typeof value.category === "string" && typeof value.durationMinutes === "number" && typeof value.priceCents === "number";
+}
+
+function isProfessional(value: unknown): value is Professional {
+  return isJsonObject(value) && typeof value.id === "string" && typeof value.name === "string" && typeof value.specialty === "string";
+}
+
+function isCatalog(value: unknown): value is Catalog {
+  if (!isJsonObject(value) || !isJsonObject(value.business)) return false;
+  const { business } = value;
+  return ["name", "slug", "timezone", "currency"].every((key) => typeof business[key] === "string") &&
+    Array.isArray(value.services) && value.services.every(isService) &&
+    Array.isArray(value.professionals) && value.professionals.every(isProfessional);
+}
 
 type AdminIdentity = {
   displayName: string; email: string; role: string; businessName: string; businessSlug: string; timezone: string;
@@ -69,11 +93,15 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
       fetch("/api/admin/appointments", { credentials: "same-origin" }),
       fetch(`/api/public/catalog?slug=${encodeURIComponent(identity.businessSlug)}`),
     ]).then(async ([appointmentsResponse, catalogResponse]) => {
-      const appointmentsData = await appointmentsResponse.json();
-      const catalogData = await catalogResponse.json();
-      if (!appointmentsResponse.ok) throw new Error(appointmentsData.error);
-      if (!catalogResponse.ok) throw new Error(catalogData.error);
-      setAppointments(Array.isArray(appointmentsData.appointments) ? appointmentsData.appointments : []);
+      const appointmentsData = await readJsonObject(appointmentsResponse);
+      const catalogData = await readJsonObject(catalogResponse);
+      if (!appointmentsResponse.ok) throw new Error(apiError(appointmentsData, "No pudimos cargar las citas"));
+      if (!catalogResponse.ok) throw new Error(apiError(catalogData, "No pudimos cargar el catálogo"));
+      const nextAppointments = Array.isArray(appointmentsData.appointments)
+        ? appointmentsData.appointments.filter(isAppointment)
+        : [];
+      if (!isCatalog(catalogData)) throw new Error("El catálogo recibido no es válido.");
+      setAppointments(nextAppointments);
       setCatalog(catalogData);
     }).catch((reason) => setLoadError(reason instanceof Error ? reason.message : "No pudimos cargar el panel"))
       .finally(() => setLoading(false));
@@ -111,7 +139,7 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
           <button className="icon-button" aria-label="Notificaciones"><Bell size={19} /></button>
           <div className="account-menu">
             <button className="user-avatar" aria-label="Abrir menú de cuenta" aria-expanded={accountOpen} onClick={() => setAccountOpen((value) => !value)}>{initials(identity.displayName)}</button>
-            {accountOpen && <div className="account-popover"><strong>{identity.displayName}</strong><small>{identity.email}</small><small>{roleLabel(identity.role)} · {identity.businessName}</small><Link href="/signout-with-chatgpt?return_to=%2Flogin"><LogOut size={15}/> Cerrar sesión</Link></div>}
+            {accountOpen && <div className="account-popover"><strong>{identity.displayName}</strong><small>{identity.email}</small><small>{roleLabel(identity.role)} · {identity.businessName}</small><form action="/api/auth/logout" method="post"><button><LogOut size={15}/> Cerrar sesión</button></form></div>}
           </div>
         </header>
 
@@ -121,7 +149,7 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
           {loadError && <p className="form-error" role="alert">{loadError}</p>}
           {active === "dashboard" ? <Dashboard appointments={appointments} timezone={identity.timezone} /> : <ModuleView section={active} appointments={appointments} catalog={catalog} onNew={() => setModalOpen(true)} onStatus={async(id,status)=>{
             const response=await fetch("/api/admin/appointments",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id,status})});
-            const data=await response.json(); if(!response.ok){setNotice(data.error??"No pudimos actualizar la cita");return}
+            const data=await readJsonObject(response); if(!response.ok){setNotice(apiError(data,"No pudimos actualizar la cita"));return}
             setAppointments((items)=>items.map((item)=>item.id===id?{...item,status}:item));setNotice("Estado actualizado");setTimeout(()=>setNotice(""),2200);
           }} />}
         </div>
@@ -243,31 +271,35 @@ type Member = { id:string; email:string; displayName:string; role:string; status
 
 function MembersPanel(){
   const [members,setMembers]=useState<Member[]>([]); const [error,setError]=useState(""); const [notice,setNotice]=useState("");
-  const load=()=>fetch("/api/admin/members").then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error);setMembers(data.members??[])}).catch(err=>setError(err instanceof Error?err.message:"No se pudo cargar el equipo"));
-  useEffect(load,[]);
-  const invite=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();setError("");const form=new FormData(e.currentTarget);const r=await fetch("/api/admin/members",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(Object.fromEntries(form.entries()))});const data=await r.json();if(!r.ok){setError(data.error);return}e.currentTarget.reset();setNotice("Invitación registrada. Se activará al iniciar sesión con ese email.");load()};
-  return <div className="security-layout"><section className="panel security-card"><PanelTitle title="Equipo con acceso" subtitle="Principio de mínimo privilegio"/>{members.map(member=><div className="member-row" key={member.id}><div className="person-initial">{initials(member.displayName||member.email)}</div><div><strong>{member.displayName||member.email}</strong><p>{member.email}</p></div><span className={`status ${member.status==="active"?"confirmada":"programada"}`}>{member.status}</span><b>{roleLabel(member.role)}</b></div>)}{!members.length&&!error&&<EmptyState text="No hay miembros para mostrar."/>}</section><section className="panel security-card"><PanelTitle title="Invitar miembro" subtitle="El email debe coincidir con su identidad"/><form className="invite-form" onSubmit={invite}><label>Nombre<input name="displayName" maxLength={100} placeholder="Nombre del miembro"/></label><label>Email<input name="email" type="email" required maxLength={254} placeholder="persona@empresa.com"/></label><label>Rol<select name="role" defaultValue="reception"><option value="reception">Recepción</option><option value="professional">Profesional</option><option value="admin">Administrador</option></select></label>{error&&<p className="form-error">{error}</p>}{notice&&<p className="form-success">{notice}</p>}<button className="primary">Crear invitación segura</button></form></section></div>
+  const load=()=>fetch("/api/admin/members").then(async r=>{const data=await readJsonObject(r);if(!r.ok)throw new Error(apiError(data,"No se pudo cargar el equipo"));const nextMembers=Array.isArray(data.members)?data.members.filter(isMember):[];setMembers(nextMembers)}).catch(err=>setError(err instanceof Error?err.message:"No se pudo cargar el equipo"));
+  useEffect(()=>{void load()},[]);
+  const invite=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();setError("");const form=new FormData(e.currentTarget);const r=await fetch("/api/admin/members",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(Object.fromEntries(form.entries()))});const data=await readJsonObject(r);if(!r.ok){setError(apiError(data,"No se pudo crear el acceso"));return}e.currentTarget.reset();setNotice("Acceso creado. Comparte la contraseña temporal de forma privada.");void load()};
+  return <div className="security-layout"><section className="panel security-card"><PanelTitle title="Equipo con acceso" subtitle="Principio de mínimo privilegio"/>{members.map(member=><div className="member-row" key={member.id}><div className="person-initial">{initials(member.displayName||member.email)}</div><div><strong>{member.displayName||member.email}</strong><p>{member.email}</p></div><span className={`status ${member.status==="active"?"confirmada":"programada"}`}>{member.status}</span><b>{roleLabel(member.role)}</b></div>)}{!members.length&&!error&&<EmptyState text="No hay miembros para mostrar."/>}</section><section className="panel security-card"><PanelTitle title="Crear acceso" subtitle="Credenciales propias de Corteza"/><form className="invite-form" onSubmit={invite}><label>Nombre<input name="displayName" maxLength={100} required placeholder="Nombre del miembro"/></label><label>Email<input name="email" type="email" required maxLength={254} placeholder="persona@empresa.com"/></label><label>Contraseña temporal<input name="password" type="password" required minLength={10} maxLength={128} autoComplete="new-password" placeholder="Mínimo 10 caracteres"/></label><label>Rol<select name="role" defaultValue="reception"><option value="reception">Recepción</option><option value="professional">Profesional</option><option value="admin">Administrador</option></select></label>{error&&<p className="form-error">{error}</p>}{notice&&<p className="form-success">{notice}</p>}<button className="primary">Crear acceso seguro</button></form></section></div>
 }
 
 function roleLabel(role:string){return ({owner:"Propietario",admin:"Administrador",reception:"Recepción",professional:"Profesional"} as Record<string,string>)[role]??role}
+
+function isMember(value:unknown):value is Member{return isJsonObject(value)&&typeof value.id==="string"&&typeof value.email==="string"&&typeof value.displayName==="string"&&typeof value.role==="string"&&typeof value.status==="string"&&typeof value.createdAt==="string"&&(typeof value.lastSeenAt==="string"||value.lastSeenAt===null)}
 
 type SecurityData={posture:Record<string,string>;members:{total:number;active:number;pending:number;suspended:number};events:{id:string;actorEmail:string|null;action:string;entityType:string;createdAt:string}[]};
 
 function SecurityCenter(){
   const [data,setData]=useState<SecurityData|null>(null); const [error,setError]=useState("");
-  useEffect(()=>{fetch("/api/admin/security").then(async r=>{const body=await r.json();if(!r.ok)throw new Error(body.error);setData(body)}).catch(err=>setError(err instanceof Error?err.message:"No se pudo cargar el estado"))},[]);
-  const controls=[["Autenticación delegada","Identidad verificada antes de entrar"],["Aislamiento por negocio","Cada consulta queda limitada al negocio"],["Roles en servidor","Los permisos no dependen de botones ocultos"],["Protección CSRF","Las mutaciones exigen mismo origen"],["Rate limiting","Frena abuso en reservas y administración"],["Auditoría","Registra cambios sensibles"],["Cabeceras seguras","CSP, HSTS y bloqueo de iframes"],["Bloqueo atómico de agenda","Evita reservas simultáneas solapadas"]];
+  useEffect(()=>{fetch("/api/admin/security").then(async r=>{const body=await readJsonObject(r);if(!r.ok)throw new Error(apiError(body,"No se pudo cargar el estado"));if(!isSecurityData(body))throw new Error("El estado de seguridad recibido no es válido.");setData(body)}).catch(err=>setError(err instanceof Error?err.message:"No se pudo cargar el estado"))},[]);
+  const controls=[["Credenciales propias","Contraseñas seguras y sesiones revocables"],["Aislamiento por negocio","Cada consulta queda limitada al negocio"],["Roles en servidor","Los permisos no dependen de botones ocultos"],["Protección CSRF","Las mutaciones exigen mismo origen"],["Rate limiting","Frena abuso en reservas y administración"],["Auditoría","Registra cambios sensibles"],["Cabeceras seguras","CSP, HSTS y bloqueo de iframes"],["Bloqueo atómico de agenda","Evita reservas simultáneas solapadas"]];
   return <div className="security-stack"><section className="security-summary"><div><ShieldCheck size={28}/><span>Postura actual</span><strong>{error?"Revisión requerida":"Protección activa"}</strong><p>Defensa en profundidad aplicada al panel, APIs y agenda.</p></div><div className="security-score"><strong>{error?"—":"8/8"}</strong><span>controles base</span></div></section><section className="security-controls">{controls.map(([title,description])=><div className="panel control-card" key={title}><CheckCircle2/><div><strong>{title}</strong><p>{description}</p></div><span>Activo</span></div>)}</section><section className="panel audit-panel"><PanelTitle title="Actividad de seguridad" subtitle="Eventos sensibles más recientes"/>{data?.events?.length?data.events.map(event=><div className="audit-row" key={event.id}><span className="activity-icon neutral"><ShieldCheck/></span><div><strong>{auditLabel(event.action)}</strong><p>{event.actorEmail??"Reserva pública"} · {event.entityType}</p></div><time>{new Date(event.createdAt).toLocaleString("es-VE")}</time></div>):<EmptyState text={error||"Todavía no hay eventos de auditoría."}/>}</section></div>
 }
 
-function auditLabel(action:string){return ({"security.owner_bootstrapped":"Propietario inicial verificado","security.legacy_owner_migrated":"Identidad propietaria actualizada","appointment.created":"Cita creada","appointment.status_updated":"Estado de cita actualizado","member.invited":"Miembro invitado","member.access_updated":"Permisos actualizados"} as Record<string,string>)[action]??action}
+function auditLabel(action:string){return ({"auth.login":"Inicio de sesión","auth.logout":"Cierre de sesión","auth.password_changed":"Contraseña actualizada","appointment.created":"Cita creada","appointment.status_updated":"Estado de cita actualizado","member.invited":"Acceso de miembro creado","member.access_updated":"Permisos actualizados"} as Record<string,string>)[action]??action}
+
+function isSecurityData(value:unknown):value is SecurityData{if(!isJsonObject(value)||!isJsonObject(value.posture)||!isJsonObject(value.members)||!Array.isArray(value.events))return false;const members=value.members;return ["total","active","pending","suspended"].every((key)=>typeof members[key]==="number")&&value.events.every((event)=>isJsonObject(event)&&typeof event.id==="string"&&(typeof event.actorEmail==="string"||event.actorEmail===null)&&typeof event.action==="string"&&typeof event.entityType==="string"&&typeof event.createdAt==="string")}
 
 function AppointmentModal({catalog,onClose,onCreated}:{catalog:Catalog;onClose:()=>void;onCreated:(a:Appointment)=>void}){
   const today=new Date().toISOString().slice(0,10); const [saving,setSaving]=useState(false); const [error,setError]=useState("");
   const [serviceId,setServiceId]=useState(catalog.services[0]?.id??"");const [professionalId,setProfessionalId]=useState(catalog.professionals[0]?.id??"");const [date,setDate]=useState(today);const [time,setTime]=useState("");const [times,setTimes]=useState<string[]>([]);const [loadingTimes,setLoadingTimes]=useState(true);
-  useEffect(()=>{if(!serviceId||!professionalId||!date)return;fetch(`/api/public/availability?slug=${encodeURIComponent(catalog.business.slug)}&serviceId=${encodeURIComponent(serviceId)}&professionalId=${encodeURIComponent(professionalId)}&date=${date}`).then(async(response)=>{const data=await response.json();if(!response.ok)throw new Error(data.error);const available=Array.isArray(data.times)?data.times:[];setTimes(available);setTime((current)=>available.includes(current)?current:(available[0]??""));}).catch((reason)=>{setTimes([]);setTime("");setError(reason instanceof Error?reason.message:"No pudimos consultar la agenda")}).finally(()=>setLoadingTimes(false))},[catalog.business.slug,date,professionalId,serviceId]);
+  useEffect(()=>{if(!serviceId||!professionalId||!date)return;fetch(`/api/public/availability?slug=${encodeURIComponent(catalog.business.slug)}&serviceId=${encodeURIComponent(serviceId)}&professionalId=${encodeURIComponent(professionalId)}&date=${date}`).then(async(response)=>{const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos consultar la agenda"));const available=stringArray(data.times);setTimes(available);setTime((current)=>available.includes(current)?current:(available[0]??""));}).catch((reason)=>{setTimes([]);setTime("");setError(reason instanceof Error?reason.message:"No pudimos consultar la agenda")}).finally(()=>setLoadingTimes(false))},[catalog.business.slug,date,professionalId,serviceId]);
   const service=catalog.services.find((item)=>item.id===serviceId);const professional=catalog.professionals.find((item)=>item.id===professionalId);
-  const submit=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();if(!service||!professional||!time)return;setSaving(true);setError("");const f=new FormData(e.currentTarget);const payload=Object.fromEntries(f.entries());try{const r=await fetch("/api/admin/appointments",{method:"POST",headers:{"content-type":"application/json","idempotency-key":crypto.randomUUID()},body:JSON.stringify({...payload,serviceId,professionalId,date,time})});const data=await r.json();if(!r.ok)throw new Error(data.error);onCreated({id:data.id,date,time,endTime:addMinutes(time,service.durationMinutes),status:"programada",source:"panel",totalCents:service.priceCents,clientName:String(payload.name),phone:String(payload.phone),email:String(payload.email),serviceName:service.name,professionalName:professional.name});}catch(err){setError(err instanceof Error?err.message:"No se pudo guardar");setSaving(false)}};
+  const submit=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();if(!service||!professional||!time)return;setSaving(true);setError("");const f=new FormData(e.currentTarget);const payload=Object.fromEntries(f.entries());try{const r=await fetch("/api/admin/appointments",{method:"POST",headers:{"content-type":"application/json","idempotency-key":crypto.randomUUID()},body:JSON.stringify({...payload,serviceId,professionalId,date,time})});const data=await readJsonObject(r);if(!r.ok)throw new Error(apiError(data,"No se pudo guardar"));if(typeof data.id!=="string")throw new Error("La cita se guardó sin un identificador válido.");onCreated({id:data.id,date,time,endTime:addMinutes(time,service.durationMinutes),status:"programada",source:"panel",totalCents:service.priceCents,clientName:String(payload.name),phone:String(payload.phone),email:String(payload.email),serviceName:service.name,professionalName:professional.name});}catch(err){setError(err instanceof Error?err.message:"No se pudo guardar");setSaving(false)}};
   return <div className="modal-backdrop" onMouseDown={(e)=>{if(e.target===e.currentTarget)onClose()}}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="appointment-title"><div className="modal-head"><div><span className="eyebrow">Agenda en tiempo real</span><h2 id="appointment-title">Nueva cita</h2></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></div><form onSubmit={submit}><div className="form-grid"><label className="wide">Nombre del cliente<input name="name" required maxLength={100} autoComplete="name" placeholder="Nombre completo"/></label><label>Teléfono<input name="phone" required maxLength={25} autoComplete="tel" placeholder="+58 412 000 0000"/></label><label>Email<input name="email" type="email" required maxLength={254} autoComplete="email" placeholder="cliente@email.com"/></label><label>Servicio<select value={serviceId} onChange={(event)=>{setLoadingTimes(true);setServiceId(event.target.value)}}>{catalog.services.map((item)=><option value={item.id} key={item.id}>{item.name} · ${(item.priceCents/100).toFixed(2)}</option>)}</select></label><label>Profesional<select value={professionalId} onChange={(event)=>{setLoadingTimes(true);setProfessionalId(event.target.value)}}>{catalog.professionals.map((item)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Fecha<input type="date" min={today} value={date} onChange={(event)=>{setLoadingTimes(true);setDate(event.target.value)}} required/></label><label>Hora<select value={time} onChange={(event)=>setTime(event.target.value)} required disabled={loadingTimes||!times.length}><option value="">{loadingTimes?"Consultando...":"Selecciona"}</option>{times.map((value)=><option key={value}>{value}</option>)}</select></label><label className="wide">Notas<textarea name="notes" maxLength={500} placeholder="Preferencias, observaciones..."/></label></div>{!loadingTimes&&!times.length&&<p className="availability-note">No quedan horarios disponibles para esta fecha.</p>}{error&&<p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving||!time}>{saving?"Guardando...":"Crear cita"}</button></div></form></div></div>
 }
 

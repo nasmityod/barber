@@ -1,24 +1,24 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  ArrowRight, CalendarCheck, Check, Clock3, LockKeyhole,
+  CalendarCheck, Check, Clock3, LockKeyhole,
   Scissors, ShieldCheck, Sparkles, TrendingUp, UsersRound,
 } from "lucide-react";
-import { chatGPTSignInPath, getChatGPTUser } from "../chatgpt-auth";
+import { getSessionUser } from "../auth";
+import { LoginForm } from "../components/LoginForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const user = await getChatGPTUser();
-  if (user) redirect("/dashboard");
+  const user = await getSessionUser();
+  if (user) redirect(user.mustChangePassword ? "/cambiar-clave" : "/dashboard");
 
   return (
     <main className="login-page">
       <section className="login-copy">
-        <Link className="login-brand" href="/login" aria-label="Corteza, inicio">
+        <div className="login-brand" aria-label="Corteza">
           <span><Scissors /></span>
           <strong>CORTEZA</strong>
-        </Link>
+        </div>
 
         <div className="login-message">
           <span className="login-kicker"><Sparkles /> Gestión inteligente para barberías</span>
@@ -62,11 +62,9 @@ export default async function LoginPage() {
           <div className="login-lock"><LockKeyhole /></div>
           <span className="eyebrow">Panel administrativo</span>
           <h2>Bienvenido a Corteza</h2>
-          <p>Inicia sesión para entrar al espacio de trabajo de tu barbería.</p>
-          <Link className="login-button" href={chatGPTSignInPath("/dashboard")}>
-            Continuar de forma segura <ArrowRight />
-          </Link>
-          <div className="login-security"><ShieldCheck /><span><b>Acceso protegido</b><small>Verificamos tu identidad y tus permisos antes de mostrar cualquier información.</small></span></div>
+          <p>Inicia sesión con las credenciales privadas de tu barbería.</p>
+          <LoginForm />
+          <div className="login-security"><ShieldCheck /><span><b>Acceso propio de Corteza</b><small>Sesión cifrada, protección contra intentos repetidos y permisos por rol.</small></span></div>
         </div>
       </section>
     </main>

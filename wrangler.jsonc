@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "corteza-barber",
-  "compatibility_date": "2026-05-22",
+  "compatibility_date": "2026-08-01",
   "compatibility_flags": [
     "nodejs_compat"
   ],
@@ -13,5 +13,24 @@
   },
   "images": {
     "binding": "IMAGES"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "site-creator-d1",
+      "database_id": "47b3c421-a9bc-4c65-a81a-16f40b3832c1",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1
+    }
   }
 }

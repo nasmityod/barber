@@ -18,7 +18,7 @@ npm run deploy
 ```
 
 The public booking flow is available at `/reservar/demo`. The administrative
-dashboard is protected by the Sites sign-in flow, server-side membership and
+dashboard uses Corteza credentials, secure server-side sessions, membership and
 role checks, same-origin mutations, rate limits, and an audit trail.
 
 ## Useful Commands

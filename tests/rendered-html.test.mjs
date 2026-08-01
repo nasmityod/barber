@@ -2,34 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 async function render(pathname) {
-  return fetch(`http://localhost:3000${pathname}`, {
-    headers: {
-      accept: "text/html",
-      "oai-authenticated-user-id": "test-owner",
-      "oai-authenticated-user-email": "owner@example.test",
-      "oai-authenticated-user-full-name": "Test%20Owner",
-      "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
-    },
-  });
+  return fetch(`http://localhost:3000${pathname}`, { headers: { accept: "text/html" } });
 }
-
-test("renders the Corteza admin dashboard", async () => {
-  const response = await render("/dashboard");
-  assert.equal(response.status, 200);
-  const html = await response.text();
-  assert.match(html, /Corteza/);
-  assert.match(html, /Tu barbería, bajo control/);
-  assert.match(html, /Citas de hoy/);
-  assert.doesNotMatch(html, /codex-preview/);
-});
 
 test("renders the public sign-in screen", async () => {
   const response = await fetch("http://localhost:3000/login");
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /Bienvenido a Corteza/);
-  assert.match(html, /Continuar de forma segura/);
-  assert.match(html, /signin-with-chatgpt/);
+  assert.match(html, /Entrar al dashboard/);
+  assert.match(html, /Correo electrónico/);
 });
 
 test("renders the public booking experience", async () => {
@@ -44,7 +26,7 @@ test("renders the public booking experience", async () => {
 test("protects administrative and legacy data boundaries", async () => {
   const anonymous = await fetch("http://localhost:3000/dashboard", { redirect: "manual" });
   assert.equal(anonymous.status, 307);
-  assert.match(anonymous.headers.get("location") ?? "", /signin-with-chatgpt/);
+  assert.match(anonymous.headers.get("location") ?? "", /\/login/);
 
   const adminApi = await fetch("http://localhost:3000/api/admin/appointments");
   assert.equal(adminApi.status, 401);

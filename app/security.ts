@@ -1,5 +1,5 @@
 import { ensureDatabase } from "../db/init";
-import { getChatGPTUser, type ChatGPTUser } from "./chatgpt-auth";
+import { getSessionUser, type AuthUser } from "./auth";
 
 export type AdminRole = "owner" | "admin" | "reception" | "professional";
 export type Permission =
@@ -19,7 +19,7 @@ const ROLE_PERMISSIONS: Record<AdminRole, readonly Permission[]> = {
 };
 
 export type AdminContext = {
-  user: ChatGPTUser;
+  user: AuthUser;
   businessId: string;
   businessName: string;
   businessSlug: string;
@@ -38,103 +38,25 @@ export function hasPermission(role: AdminRole, permission: Permission) {
 }
 
 export async function getAdminContext(permission?: Permission): Promise<AdminContext | null> {
-  const user = await getChatGPTUser();
+  const user = await getSessionUser();
   if (!user) return null;
-
   const db = await ensureDatabase();
-  const now = new Date().toISOString();
-  const email = normalizeEmail(user.email);
-
-  // A pending invitation becomes active only when the signed identity's email matches.
-  await db.prepare(`UPDATE business_members
-    SET user_id = ?, status = 'active', display_name = ?, last_seen_at = ?
-    WHERE lower(email) = ? AND user_id IS NULL AND status = 'pending'`)
-    .bind(user.userId, cleanText(user.displayName, 100), now, email).run();
-
-  let member = await findMembership(db, user.userId);
-
-  // Migrate installations that previously used the temporary fixed
-  // administrator. The guarded update can only be claimed once.
-  if (!member) {
-    const legacyOwner = await db.prepare(`SELECT id, business_id AS businessId
-      FROM business_members
-      WHERE user_id = 'cloudflare-public-admin' AND email = 'admin@corteza.studio'
-        AND role = 'owner' AND status = 'active' LIMIT 1`)
-      .first<{ id:string; businessId:string }>();
-    if (legacyOwner) {
-      await db.prepare(`UPDATE business_members
-        SET user_id = ?, email = ?, display_name = ?, last_seen_at = ?
-        WHERE id = ? AND user_id = 'cloudflare-public-admin'`)
-        .bind(user.userId, email, cleanText(user.displayName, 100), now, legacyOwner.id).run();
-      member = await findMembership(db, user.userId);
-      if (member) await writeAudit(db, {
-        businessId: legacyOwner.businessId, user,
-        action: "security.legacy_owner_migrated", entityType: "business_member",
-        entityId: legacyOwner.id, metadata: { method: "verified_identity_upgrade" },
-      });
-    }
-  }
-
-  // Secure one-time bootstrap for a new private installation. The conditional
-  // INSERT is atomic: only the first authenticated visitor can become owner.
-  if (!member) {
-    const business = await db.prepare("SELECT id FROM businesses ORDER BY id LIMIT 1").first<{ id: string }>();
-    if (business) {
-      await db.prepare(`INSERT OR IGNORE INTO business_members
-        (id,business_id,user_id,email,display_name,role,status,created_at,last_seen_at)
-        SELECT ?,?,?,?,?, 'owner','active',?,?
-        WHERE NOT EXISTS (SELECT 1 FROM business_members WHERE status = 'active')`)
-        .bind(crypto.randomUUID(), business.id, user.userId, email, cleanText(user.displayName, 100), now, now).run();
-      member = await findMembership(db, user.userId);
-      if (member) {
-        await writeAudit(db, {
-          businessId: member.businessId,
-          user,
-          action: "security.owner_bootstrapped",
-          entityType: "business_member",
-          entityId: user.userId,
-          metadata: { method: "first_authenticated_private_user" },
-        });
-      }
-    }
-  }
-
-  if (!member) throw new HttpError(403, "Tu cuenta no tiene acceso a este negocio.");
-  if (!isRole(member.role)) throw new HttpError(403, "El rol asignado no es válido.");
-  if (permission && !hasPermission(member.role, permission)) {
+  if (user.mustChangePassword) throw new HttpError(428, "Debes cambiar tu contraseña antes de continuar.");
+  if (!isRole(user.role)) throw new HttpError(403, "El rol asignado no es válido.");
+  if (permission && !hasPermission(user.role, permission)) {
     throw new HttpError(403, "No tienes permiso para realizar esta acción.");
   }
-
-  await db.prepare("UPDATE business_members SET last_seen_at = ?, display_name = ? WHERE id = ?")
-    .bind(now, cleanText(user.displayName, 100), member.id).run();
-
+  const business = await db.prepare("SELECT name, slug, timezone FROM businesses WHERE id = ?")
+    .bind(user.businessId).first<{ name:string;slug:string;timezone:string }>();
+  if (!business) throw new HttpError(403, "Tu negocio ya no está disponible.");
   return {
     user,
-    businessId: member.businessId,
-    businessName: member.businessName,
-    businessSlug: member.businessSlug,
-    timezone: member.timezone,
-    role: member.role,
+    businessId: user.businessId,
+    businessName: business.name,
+    businessSlug: business.slug,
+    timezone: business.timezone,
+    role: user.role,
   };
-}
-
-type MembershipRow = {
-  id: string;
-  businessId: string;
-  businessName: string;
-  businessSlug: string;
-  timezone: string;
-  role: string;
-};
-
-async function findMembership(db: D1Database, userId: string) {
-  return db.prepare(`SELECT m.id, m.business_id AS businessId, m.role,
-      b.name AS businessName, b.slug AS businessSlug, b.timezone
-    FROM business_members m
-    JOIN businesses b ON b.id = m.business_id
-    WHERE m.user_id = ? AND m.status = 'active'
-    ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END
-    LIMIT 1`).bind(userId).first<MembershipRow>();
 }
 
 function isRole(value: string): value is AdminRole {
@@ -242,7 +164,7 @@ export function clientAddress(request: Request) {
 
 export async function writeAudit(db: D1Database, input: {
   businessId: string;
-  user?: ChatGPTUser | null;
+  user?: AuthUser | null;
   action: string;
   entityType: string;
   entityId?: string | null;

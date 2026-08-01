@@ -1,10 +1,11 @@
 import { ensureDatabase } from "../../../../db/init";
+import { setMemberPassword } from "../../../auth";
 import {
   assertSameOrigin, cleanText, errorResponse, getAdminContext, HttpError,
   isEmail, normalizeEmail, readJson, writeAudit, type AdminRole,
 } from "../../../security";
 
-type MemberPayload = { email?: unknown; displayName?: unknown; role?: unknown; memberId?: unknown; status?: unknown };
+type MemberPayload = { email?: unknown; displayName?: unknown; password?:unknown; role?: unknown; memberId?: unknown; status?: unknown };
 
 export async function GET() {
   try {
@@ -30,23 +31,28 @@ export async function POST(request: Request) {
     const body = await readJson<MemberPayload>(request);
     const email = normalizeEmail(body.email);
     const role = cleanText(body.role, 20) as AdminRole;
-    if (!isEmail(email) || !["admin", "reception", "professional"].includes(role)) {
+    const password = cleanText(body.password, 128);
+    if (!isEmail(email) || password.length < 10 || !/[A-Za-z]/u.test(password) || !/\d/u.test(password) || !["admin", "reception", "professional"].includes(role)) {
       throw new HttpError(400, "Email o rol no válido.");
     }
     if (role === "admin" && context.role !== "owner") throw new HttpError(403, "Solo el propietario puede invitar administradores.");
     const db = await ensureDatabase();
     const id = crypto.randomUUID();
+    const userId = `local:${crypto.randomUUID()}`;
     try {
       await db.prepare(`INSERT INTO business_members
-        (id,business_id,email,display_name,role,status,invited_by,created_at)
-        VALUES (?,?,?,?,?,'pending',?,?)`)
-        .bind(id, context.businessId, email, cleanText(body.displayName, 100), role, context.user.userId, new Date().toISOString()).run();
+        (id,business_id,user_id,email,display_name,role,status,invited_by,created_at)
+        VALUES (?,?,?,?,?,?,'active',?,?)`)
+        .bind(id, context.businessId, userId, email, cleanText(body.displayName, 100), role, context.user.userId, new Date().toISOString()).run();
+      await setMemberPassword(db, id, password, true);
     } catch (error) {
+      await db.prepare("DELETE FROM business_members WHERE id = ? AND business_id = ? AND user_id = ?")
+        .bind(id, context.businessId, userId).run();
       if ((error instanceof Error ? error.message : "").includes("UNIQUE")) throw new HttpError(409, "Ese email ya pertenece al equipo.");
       throw error;
     }
     await writeAudit(db, { businessId: context.businessId, user: context.user, action: "member.invited", entityType: "business_member", entityId: id, metadata: { role } });
-    return Response.json({ id, message: "Invitación preparada" }, { status: 201, headers: { "cache-control": "no-store" } });
+    return Response.json({ id, message: "Acceso creado" }, { status: 201, headers: { "cache-control": "no-store" } });
   } catch (error) {
     return errorResponse(error);
   }

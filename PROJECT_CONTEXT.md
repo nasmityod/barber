@@ -926,7 +926,7 @@ pendiente | enviado -> fallido
 - Drizzle para definición de esquema y migraciones.
 - Lucide React para iconografía.
 - CSS responsive propio.
-- Despliegue con Sites.
+- Despliegue directo en Cloudflare Workers.
 
 ### 7.2 Rutas actuales
 
@@ -995,10 +995,10 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 
 ### 7.5 Despliegue
 
-- Sitio: `https://corteza-barber.nasmityod.chatgpt.site`
-- Estado: desplegado de forma privada.
+- Sitio: desplegado directamente como Cloudflare Worker.
+- Estado: desplegado directamente en Cloudflare Workers.
 - Reserva de demostración: `/reservar/demo`.
-- El enlace público no puede compartirse con clientes reales mientras el sitio completo siga privado.
+- El panel queda protegido por credenciales propias y la reserva pública permanece accesible sin sesión.
 
 ## 8. Checklist de relevamiento
 
@@ -1061,7 +1061,7 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 - [x] Navegación principal.
 - [x] Reserva pública responsive.
 - [x] Tarjeta social.
-- [x] Despliegue privado.
+- [x] Despliegue directo en Cloudflare Workers.
 - [x] Pruebas básicas de renderizado.
 - [x] Cambio de dirección visual solicitado: eliminar beige.
 - [ ] Validación visual final por el usuario.
@@ -1160,7 +1160,7 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 
 ### Seguridad, SaaS y operación
 
-- [x] Autenticación real para propietarios mediante identidad de Sites.
+- [x] Autenticación propia con contraseña, sesión segura y cambio obligatorio de clave temporal.
 - [x] Invitación de empleados ligada a email verificado.
 - [x] Roles y permisos base aplicados en servidor.
 - [x] Aislamiento multi-tenant validado en las APIs implementadas.
@@ -1178,8 +1178,8 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 
 1. Algunas métricas y registros visibles son datos de demostración en el cliente.
 2. Las citas reales de D1 se mezclan con datos semilla visuales en ciertas vistas.
-3. El panel usa autenticación delegada de Sites y roles por negocio; todavía no existe acceso con credenciales propias ni proveedores externos.
-4. El despliegue completo es privado; el enlace de reserva aún no es público para clientes.
+3. El acceso usa credenciales propias de Corteza; todavía no existe recuperación automática por email.
+4. La reserva pública y el panel se sirven desde el mismo Worker, con autorización aplicada solo al panel y sus APIs.
 5. Las fechas visibles de demostración están fijadas en agosto de 2026.
 6. Solo el backend de citas está operativo.
 7. Los demás botones pueden ser demostrativos.
@@ -1298,7 +1298,7 @@ Orden sugerido:
 - `db/init.ts` — creación y semillas D1.
 - `app/globals.css` — sistema visual completo.
 - `app/layout.tsx` — metadata y tarjeta social.
-- `.openai/hosting.json` — proyecto y binding D1.
+- `wrangler.jsonc` — Worker, assets, observabilidad y binding D1.
 - `drizzle/` — migraciones.
 - `tests/rendered-html.test.mjs` — pruebas básicas.
 

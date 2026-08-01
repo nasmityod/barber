@@ -138,3 +138,26 @@ export const idempotencyKeys = sqliteTable("idempotency_keys", {
   appointmentId: text("appointment_id").notNull(),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("idx_idempotency_business_created").on(table.businessId, table.createdAt)]);
+
+export const authCredentials = sqliteTable("auth_credentials", {
+  memberId: text("member_id").primaryKey(),
+  passwordHash: text("password_hash").notNull(),
+  passwordSalt: text("password_salt").notNull(),
+  passwordIterations: integer("password_iterations").notNull(),
+  mustChangePassword: integer("must_change_password", { mode:"boolean" }).notNull().default(true),
+  passwordUpdatedAt: text("password_updated_at").notNull(),
+  failedAttempts: integer("failed_attempts").notNull().default(0),
+  lockedUntil: text("locked_until"),
+});
+
+export const authSessions = sqliteTable("auth_sessions", {
+  tokenHash: text("token_hash").primaryKey(),
+  memberId: text("member_id").notNull(),
+  businessId: text("business_id").notNull(),
+  createdAt: text("created_at").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  lastSeenAt: text("last_seen_at").notNull(),
+}, (table) => [
+  index("idx_auth_sessions_member").on(table.memberId),
+  index("idx_auth_sessions_expires").on(table.expiresAt),
+]);
