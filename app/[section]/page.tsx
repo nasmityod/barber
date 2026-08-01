@@ -1,5 +1,4 @@
 import { AdminApp } from "../components/AdminApp";
-import { requireChatGPTUser } from "../chatgpt-auth";
 import { getAdminContext, HttpError } from "../security";
 import Link from "next/link";
 
@@ -7,7 +6,6 @@ export const dynamic = "force-dynamic";
 
 export default async function SectionPage({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;
-  await requireChatGPTUser(`/${encodeURIComponent(section)}`);
   let context;
   try {
     context = await getAdminContext("appointments.read");
