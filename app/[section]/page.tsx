@@ -1,10 +1,13 @@
 import { AdminApp } from "../components/AdminApp";
+import { requireChatGPTUser } from "../chatgpt-auth";
 import { getAdminContext, HttpError } from "../security";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function SectionPage({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;
+  await requireChatGPTUser(`/${encodeURIComponent(section)}`);
   let context;
   try {
     context = await getAdminContext("appointments.read");
@@ -15,7 +18,7 @@ export default async function SectionPage({ params }: { params: Promise<{ sectio
       throw error;
     }
   }
-  if (!context) return <main className="access-denied"><div><span>Acceso no disponible</span><h1>No pudimos cargar el negocio.</h1><p>Comprueba la conexión con la base de datos de Cloudflare.</p></div></main>;
+  if (!context) return <main className="access-denied"><div><span>Acceso protegido</span><h1>Tu cuenta no pertenece a este negocio.</h1><p>Pide al propietario que te invite usando el mismo correo de tu cuenta.</p><Link href="/signout-with-chatgpt?return_to=%2Flogin">Usar otra cuenta</Link></div></main>;
   return <AdminApp section={section} identity={{
     displayName: context.user.displayName,
     email: context.user.email,

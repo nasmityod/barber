@@ -1,5 +1,5 @@
 import { ensureDatabase } from "../db/init";
-import { ADMIN_USER, type AdminUser } from "./admin-user";
+import { getChatGPTUser, type ChatGPTUser } from "./chatgpt-auth";
 
 export type AdminRole = "owner" | "admin" | "reception" | "professional";
 export type Permission =
@@ -19,7 +19,7 @@ const ROLE_PERMISSIONS: Record<AdminRole, readonly Permission[]> = {
 };
 
 export type AdminContext = {
-  user: AdminUser;
+  user: ChatGPTUser;
   businessId: string;
   businessName: string;
   businessSlug: string;
@@ -38,7 +38,8 @@ export function hasPermission(role: AdminRole, permission: Permission) {
 }
 
 export async function getAdminContext(permission?: Permission): Promise<AdminContext | null> {
-  const user = ADMIN_USER;
+  const user = await getChatGPTUser();
+  if (!user) return null;
 
   const db = await ensureDatabase();
   const now = new Date().toISOString();
@@ -51,6 +52,28 @@ export async function getAdminContext(permission?: Permission): Promise<AdminCon
     .bind(user.userId, cleanText(user.displayName, 100), now, email).run();
 
   let member = await findMembership(db, user.userId);
+
+  // Migrate installations that previously used the temporary fixed
+  // administrator. The guarded update can only be claimed once.
+  if (!member) {
+    const legacyOwner = await db.prepare(`SELECT id, business_id AS businessId
+      FROM business_members
+      WHERE user_id = 'cloudflare-public-admin' AND email = 'admin@corteza.studio'
+        AND role = 'owner' AND status = 'active' LIMIT 1`)
+      .first<{ id:string; businessId:string }>();
+    if (legacyOwner) {
+      await db.prepare(`UPDATE business_members
+        SET user_id = ?, email = ?, display_name = ?, last_seen_at = ?
+        WHERE id = ? AND user_id = 'cloudflare-public-admin'`)
+        .bind(user.userId, email, cleanText(user.displayName, 100), now, legacyOwner.id).run();
+      member = await findMembership(db, user.userId);
+      if (member) await writeAudit(db, {
+        businessId: legacyOwner.businessId, user,
+        action: "security.legacy_owner_migrated", entityType: "business_member",
+        entityId: legacyOwner.id, metadata: { method: "verified_identity_upgrade" },
+      });
+    }
+  }
 
   // Secure one-time bootstrap for a new private installation. The conditional
   // INSERT is atomic: only the first authenticated visitor can become owner.
@@ -219,7 +242,7 @@ export function clientAddress(request: Request) {
 
 export async function writeAudit(db: D1Database, input: {
   businessId: string;
-  user?: AdminUser | null;
+  user?: ChatGPTUser | null;
   action: string;
   entityType: string;
   entityId?: string | null;

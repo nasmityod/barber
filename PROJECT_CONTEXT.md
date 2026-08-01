@@ -1178,7 +1178,7 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 
 1. Algunas métricas y registros visibles son datos de demostración en el cliente.
 2. Las citas reales de D1 se mezclan con datos semilla visuales en ciertas vistas.
-3. No existe autenticación propia de barberías.
+3. El panel usa autenticación delegada de Sites y roles por negocio; todavía no existe acceso con credenciales propias ni proveedores externos.
 4. El despliegue completo es privado; el enlace de reserva aún no es público para clientes.
 5. Las fechas visibles de demostración están fijadas en agosto de 2026.
 6. Solo el backend de citas está operativo.

@@ -23,6 +23,15 @@ test("renders the Corteza admin dashboard", async () => {
   assert.doesNotMatch(html, /codex-preview/);
 });
 
+test("renders the public sign-in screen", async () => {
+  const response = await fetch("http://localhost:3000/login");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Bienvenido a Corteza/);
+  assert.match(html, /Continuar de forma segura/);
+  assert.match(html, /signin-with-chatgpt/);
+});
+
 test("renders the public booking experience", async () => {
   const response = await render("/reservar/demo");
   assert.equal(response.status, 200);

@@ -1,4 +1,4 @@
-# vinext-starter
+# Corteza
 
 A full-stack barber management app running on
 [vinext](https://github.com/cloudflare/vinext), Cloudflare Workers and D1.
@@ -17,10 +17,9 @@ npm run build
 npm run deploy
 ```
 
-The dashboard is available at `/dashboard` and uses the Cloudflare deployment
-administrator identity. It does not require ChatGPT login. Add Cloudflare
-Access or another application authentication layer before exposing admin
-actions publicly.
+The public booking flow is available at `/reservar/demo`. The administrative
+dashboard is protected by the Sites sign-in flow, server-side membership and
+role checks, same-origin mutations, rate limits, and an audit trail.
 
 ## Useful Commands
 
