@@ -1,5 +1,5 @@
 import { ensureDatabase } from "../db/init";
-import { getChatGPTUser, type ChatGPTUser } from "./chatgpt-auth";
+import { ADMIN_USER, type AdminUser } from "./admin-user";
 
 export type AdminRole = "owner" | "admin" | "reception" | "professional";
 export type Permission =
@@ -19,7 +19,7 @@ const ROLE_PERMISSIONS: Record<AdminRole, readonly Permission[]> = {
 };
 
 export type AdminContext = {
-  user: ChatGPTUser;
+  user: AdminUser;
   businessId: string;
   businessName: string;
   businessSlug: string;
@@ -38,8 +38,7 @@ export function hasPermission(role: AdminRole, permission: Permission) {
 }
 
 export async function getAdminContext(permission?: Permission): Promise<AdminContext | null> {
-  const user = await getChatGPTUser();
-  if (!user) return null;
+  const user = ADMIN_USER;
 
   const db = await ensureDatabase();
   const now = new Date().toISOString();
@@ -220,7 +219,7 @@ export function clientAddress(request: Request) {
 
 export async function writeAudit(db: D1Database, input: {
   businessId: string;
-  user?: ChatGPTUser | null;
+  user?: AdminUser | null;
   action: string;
   entityType: string;
   entityId?: string | null;

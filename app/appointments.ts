@@ -1,4 +1,4 @@
-import type { ChatGPTUser } from "./chatgpt-auth";
+import type { AdminUser } from "./admin-user";
 import {
   HttpError, cleanText, isDate, isEmail, isPhone, isTime, localDate,
   minutesToTime, normalizeEmail, timeToMinutes, weekdayForDate,
@@ -17,7 +17,7 @@ export type AppointmentInput = {
   notes?: string;
   source: "online" | "panel";
   idempotencyHash: string;
-  actor?: ChatGPTUser | null;
+  actor?: AdminUser | null;
 };
 
 type ServiceRow = { duration: number; price: number; name: string };
