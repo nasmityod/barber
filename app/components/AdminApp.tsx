@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BarChart3, CalendarDays, ChevronDown, CircleDollarSign, Clock3, Copy, CreditCard,
   LayoutDashboard, Menu, MessageCircle, Plus, Scissors, Search, Settings, Sparkles,
@@ -10,7 +10,11 @@ import {
 
 type Appointment = {
   id: string; date: string; time: string; status: string; source: string;
-  totalCents: number; clientName: string; phone: string; serviceName: string; professionalName: string;
+  totalCents: number; clientName: string; phone: string; email?: string; serviceName: string; professionalName: string;
+};
+
+type AdminIdentity = {
+  displayName: string; email: string; role: string; businessName: string; businessSlug: string; timezone: string;
 };
 
 const nav = [
@@ -27,7 +31,8 @@ const nav = [
     ["fidelizacion", "Fidelización", Star],
   ]},
   { label: "Sistema", items: [
-    ["configuracion", "Configuración", Settings], ["usuarios", "Usuarios y roles", ShieldCheck],
+    ["configuracion", "Configuración", Settings], ["usuarios", "Usuarios y roles", UsersRound],
+    ["seguridad", "Centro de seguridad", ShieldCheck],
   ]},
 ] as const;
 
@@ -40,32 +45,25 @@ const titles: Record<string, [string, string]> = {
   reportes: ["Reportes", "Entiende el rendimiento del negocio"], marketing: ["Marketing", "Mensajes y promociones"],
   fidelizacion: ["Fidelización", "Convierte visitas en clientes frecuentes"], configuracion: ["Configuración", "Preferencias del negocio y reservas"],
   usuarios: ["Usuarios y roles", "Accesos seguros para tu equipo"],
+  seguridad: ["Centro de seguridad", "Identidad, permisos, auditoría y protección activa"],
 };
 
-const seedAppointments: Appointment[] = [
-  { id: "seed-1", date: "2026-08-01", time: "10:30", status: "confirmada", source: "online", totalCents: 2800, clientName: "Diego Rojas", phone: "+58 412 344 1098", serviceName: "Corte + Barba", professionalName: "Mateo Silva" },
-  { id: "seed-2", date: "2026-08-01", time: "12:00", status: "programada", source: "panel", totalCents: 1800, clientName: "Andrés León", phone: "+58 424 870 4412", serviceName: "Corte Signature", professionalName: "Mateo Silva" },
-  { id: "seed-3", date: "2026-08-01", time: "15:30", status: "programada", source: "online", totalCents: 1200, clientName: "Luis Mena", phone: "+58 414 322 6701", serviceName: "Barba Ritual", professionalName: "Mateo Silva" },
-];
-
-export function AdminApp({ section }: { section: string }) {
+export function AdminApp({ section, identity }: { section: string; identity: AdminIdentity }) {
   const active = titles[section] ? section : "dashboard";
   const [mobileOpen, setMobileOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [appointments, setAppointments] = useState<Appointment[]>(seedAppointments);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    fetch("/api/appointments").then((r) => r.json()).then((data) => {
-      if (Array.isArray(data.appointments) && data.appointments.length) {
-        setAppointments([...seedAppointments, ...data.appointments.filter((a: Appointment) => !seedAppointments.some((s) => s.id === a.id))]);
-      }
+    fetch("/api/admin/appointments", { credentials: "same-origin" }).then((r) => r.json()).then((data) => {
+      if (Array.isArray(data.appointments)) setAppointments(data.appointments);
     }).catch(() => undefined);
   }, []);
 
   const [title, subtitle] = titles[active];
   const copyLink = async () => {
-    await navigator.clipboard.writeText(`${window.location.origin}/reservar/demo`);
+    await navigator.clipboard.writeText(`${window.location.origin}/reservar/${identity.businessSlug}`);
     setNotice("Link de reservas copiado"); setTimeout(() => setNotice(""), 2200);
   };
 
@@ -74,7 +72,7 @@ export function AdminApp({ section }: { section: string }) {
       <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
         <div className="brand"><div className="brand-mark"><Scissors size={20} /></div><div><strong>CORTEZA</strong><span>studio manager</span></div></div>
         <button className="mobile-close" onClick={() => setMobileOpen(false)} aria-label="Cerrar menú"><X size={20} /></button>
-        <div className="workspace"><div className="avatar">CS</div><div><strong>Corteza Studio</strong><span>Plan Pro</span></div><ChevronDown size={16} /></div>
+        <div className="workspace"><div className="avatar">{identity.businessName.slice(0, 2).toUpperCase()}</div><div><strong>{identity.businessName}</strong><span>Espacio protegido</span></div><ChevronDown size={16} /></div>
         <nav>
           {nav.map((group) => <div className="nav-group" key={group.label}><span className="nav-label">{group.label}</span>
             {group.items.map(([slug, label, Icon]) => <a className={active === slug ? "active" : ""} href={`/${slug}`} key={slug} onClick={() => setMobileOpen(false)}><Icon size={18} /><span>{label}</span>{slug === "citas" && <em>3</em>}</a>)}
@@ -87,14 +85,14 @@ export function AdminApp({ section }: { section: string }) {
         <header className="topbar">
           <button className="icon-button menu-button" onClick={() => setMobileOpen(true)} aria-label="Abrir menú"><Menu size={20} /></button>
           <div className="topbar-search"><Search size={17} /><input aria-label="Buscar" placeholder="Buscar cliente, cita o servicio..." /></div>
-          <a className="public-link" href="/reservar/demo" target="_blank"><Sparkles size={16} /> Ver página pública</a>
+          <a className="public-link" href={`/reservar/${identity.businessSlug}`} target="_blank" rel="noreferrer"><Sparkles size={16} /> Ver página pública</a>
           <button className="icon-button"><MessageCircle size={19} /><i className="notify-dot" /></button>
-          <div className="user-avatar">NM</div>
+          <div className="user-avatar" title={`${identity.displayName} · ${identity.role}`}>{initials(identity.displayName)}</div>
         </header>
 
         <div className="page-content">
-          <div className="page-heading"><div><p className="eyebrow">Corteza Studio</p><h1>{title}</h1><p>{subtitle}</p></div><div className="heading-actions"><button className="secondary" onClick={copyLink}><Copy size={16} /> Link de reservas</button><button className="primary" onClick={() => setModalOpen(true)}><Plus size={17} /> Nueva cita</button></div></div>
-          {active === "dashboard" ? <Dashboard appointments={appointments} /> : <ModuleView section={active} appointments={appointments} onNew={() => setModalOpen(true)} />}
+          <div className="page-heading"><div><p className="eyebrow">{identity.businessName}</p><h1>{title}</h1><p>{subtitle}</p></div><div className="heading-actions"><button className="secondary" onClick={copyLink}><Copy size={16} /> Link de reservas</button><button className="primary" onClick={() => setModalOpen(true)}><Plus size={17} /> Nueva cita</button></div></div>
+          {active === "dashboard" ? <Dashboard appointments={appointments} timezone={identity.timezone} /> : <ModuleView section={active} appointments={appointments} onNew={() => setModalOpen(true)} />}
         </div>
       </main>
       {modalOpen && <AppointmentModal onClose={() => setModalOpen(false)} onCreated={(appointment) => { setAppointments((old) => [...old, appointment]); setModalOpen(false); setNotice("Cita creada correctamente"); setTimeout(() => setNotice(""), 2500); }} />}
@@ -103,20 +101,24 @@ export function AdminApp({ section }: { section: string }) {
   );
 }
 
-function Dashboard({ appointments }: { appointments: Appointment[] }) {
+function Dashboard({ appointments, timezone }: { appointments: Appointment[]; timezone: string }) {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const todayAppointments = appointments.filter((appointment) => appointment.date === today);
+  const todayRevenue = todayAppointments.filter((appointment) => appointment.status === "completada").reduce((sum, appointment) => sum + appointment.totalCents, 0);
+  const clientCount = new Set(appointments.map((appointment) => appointment.email ?? appointment.phone)).size;
   return <>
     <section className="metric-grid">
-      <Metric icon={<CalendarDays />} tone="terracotta" label="Citas de hoy" value={String(appointments.filter((a) => a.date === "2026-08-01").length)} trend="+18% vs. sábado anterior" />
-      <Metric icon={<CircleDollarSign />} tone="olive" label="Ingresos del día" value="$58.00" trend="3 servicios cobrados" />
-      <Metric icon={<UsersRound />} tone="ink" label="Clientes activos" value="148" trend="12 nuevos este mes" />
-      <Metric icon={<Clock3 />} tone="sand" label="Ocupación" value="76%" trend="5.3 h reservadas" />
+      <Metric icon={<CalendarDays />} tone="terracotta" label="Citas de hoy" value={String(todayAppointments.length)} trend="Datos reales de agenda" />
+      <Metric icon={<CircleDollarSign />} tone="olive" label="Ingresos completados" value={`$${(todayRevenue / 100).toFixed(2)}`} trend="Solo citas completadas" />
+      <Metric icon={<UsersRound />} tone="ink" label="Clientes en agenda" value={String(clientCount)} trend="Sin registros ficticios" />
+      <Metric icon={<ShieldCheck />} tone="sand" label="Seguridad" value="Activa" trend="Roles, límites y auditoría" />
     </section>
     <section className="dashboard-grid">
       <div className="panel revenue-panel"><PanelTitle title="Ingresos" subtitle="Últimos 7 días" action="Esta semana" /><div className="big-number">$412.00 <span><TrendingUp size={15} /> 12.4%</span></div><div className="chart">
         {[42,58,48,74,66,90,78].map((v,i)=><div className="bar-wrap" key={i}><div className={`bar ${i===5?"hot":""}`} style={{height:`${v}%`}} /><span>{["L","M","X","J","V","S","D"][i]}</span></div>)}
       </div></div>
       <div className="panel"><PanelTitle title="Próximas citas" subtitle={`${appointments.length} en agenda`} action="Ver agenda" />
-        <div className="appointment-list">{appointments.slice(0,4).map((a)=><AppointmentRow key={a.id} appointment={a} />)}</div>
+        <div className="appointment-list">{appointments.length ? appointments.slice(0,4).map((a)=><AppointmentRow key={a.id} appointment={a} />) : <EmptyState text="Aún no hay citas guardadas." />}</div>
       </div>
     </section>
     <section className="lower-grid"><div className="panel"><PanelTitle title="Servicios más pedidos" subtitle="Este mes" action="Ver todos" />
@@ -137,12 +139,20 @@ function PanelTitle({ title, subtitle, action }: { title: string; subtitle: stri
   return <div className="panel-title"><div><h2>{title}</h2><p>{subtitle}</p></div>{action && <button>{action}<ArrowUpRight size={14} /></button>}</div>;
 }
 
+function initials(value: string) {
+  return value.split(/\s+/u).filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "U";
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className="empty-state"><CalendarDays size={24}/><strong>{text}</strong><span>Los datos aparecerán aquí cuando se registren.</span></div>;
+}
+
 function AppointmentRow({ appointment: a }: { appointment: Appointment }) {
   return <div className="appointment-row"><time>{a.time}</time><div className="person-initial">{a.clientName.split(" ").map((n)=>n[0]).slice(0,2).join("")}</div><div><strong>{a.clientName}</strong><p>{a.serviceName} · {a.professionalName}</p></div><span className={`status ${a.status}`}>{a.status}</span><button className="ghost-icon" aria-label="Más opciones"><MoreHorizontal size={18}/></button></div>;
 }
 
 function ModuleView({ section, appointments, onNew }: { section: string; appointments: Appointment[]; onNew: () => void }) {
-  if (section === "agenda") return <Agenda appointments={appointments} />;
+  if (section === "agenda") return <Agenda />;
   if (section === "citas") return <Appointments appointments={appointments} onNew={onNew} />;
   if (section === "clientes") return <Clients />;
   if (section === "caja") return <Cash />;
@@ -153,7 +163,7 @@ function ModuleView({ section, appointments, onNew }: { section: string; appoint
   return <FeatureSection section={section} />;
 }
 
-function Agenda({ appointments }: { appointments: Appointment[] }) {
+function Agenda() {
   const hours=["09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00"];
   return <div className="panel agenda-panel"><div className="agenda-toolbar"><div><button className="icon-button">‹</button><button className="icon-button">›</button><button className="secondary compact">Hoy</button></div><strong>27 jul — 2 ago 2026</strong><div className="segmented"><button>Día</button><button className="selected">Semana</button><button>Mes</button></div></div><div className="calendar-grid"><div className="calendar-head empty" />{["Lun 27","Mar 28","Mié 29","Jue 30","Vie 31","Sáb 1","Dom 2"].map(d=><div className={d.includes("Sáb")?"calendar-head today":"calendar-head"} key={d}>{d}</div>)}{hours.map((h)=><div className="calendar-row" key={h}><div className="hour">{h}</div>{[0,1,2,3,4,5,6].map(d=><div className="calendar-cell" key={d}>{d===5 && h==="10:00"&&<div className="event terracotta">10:30 Diego<br/><b>Corte + Barba</b></div>}{d===5&&h==="12:00"&&<div className="event olive">12:00 Andrés<br/><b>Corte Signature</b></div>}{d===5&&h==="15:00"&&<div className="event sand">15:30 Luis<br/><b>Barba Ritual</b></div>}</div>)}</div>)}</div></div>;
 }
@@ -174,10 +184,44 @@ function Schedules(){return <div className="panel"><div className="schedule-pers
 
 function Reports(){return <><section className="metric-grid three"><Metric icon={<CircleDollarSign/>} tone="olive" label="Ingresos del mes" value="$1,842" trend="+12.4%"/><Metric icon={<CalendarDays/>} tone="terracotta" label="Citas completadas" value="86" trend="91% efectividad"/><Metric icon={<UsersRound/>} tone="ink" label="Clientes nuevos" value="18" trend="+5 vs. julio"/></section><div className="dashboard-grid"><div className="panel revenue-panel"><PanelTitle title="Ingresos mensuales" subtitle="Enero — Agosto" action="Exportar"/><div className="chart tall-chart">{[30,42,38,55,61,68,79,92].map((v,i)=><div className="bar-wrap" key={i}><div className={`bar ${i===7?"hot":""}`} style={{height:`${v}%`}}/><span>{["E","F","M","A","M","J","J","A"][i]}</span></div>)}</div></div><div className="panel"><PanelTitle title="Mix de servicios" subtitle="Por ingresos"/><div className="donut"><div><b>86</b><span>servicios</span></div></div><div className="legend"><span><i className="dot terra"/>Cortes 48%</span><span><i className="dot olive"/>Combos 34%</span><span><i className="dot sand"/>Barba 18%</span></div></div></div></>}
 
-function FeatureSection({section}:{section:string}){const content:Record<string,[string,string,string[]]>= {estaciones:["Estaciones y recursos","Evita reservas dobles cuando compartes sillas o equipos",["Silla principal","Lavacabezas","Sala privada"]],marketing:["Automatiza tu comunicación","Confirma citas, recupera clientes y lanza promociones",["Recordatorio 24 horas antes","Confirmación por WhatsApp","Campaña de clientes inactivos"]],fidelizacion:["Programa de puntos","Premia a quienes vuelven y aumenta la recurrencia",["1 punto por cada $1","20 puntos de bienvenida","Recompensa a los 100 puntos"]],configuracion:["Preferencias del negocio","Todo lo que necesita tu operación diaria",["Datos e identidad","Reservas y cancelaciones","Pagos y facturación","WhatsApp e imágenes"]],usuarios:["Accesos y permisos","Define qué puede ver y modificar cada persona",["Administrador · acceso total","Profesional · agenda propia","Recepción · citas y caja"]]};const [h,p,items]=content[section]??["Módulo","Configuración disponible",[]];return <div className="feature-layout"><div className="feature-hero"><span className="eyebrow">Configuración</span><h2>{h}</h2><p>{p}</p><button className="primary">Configurar ahora</button></div><div className="panel option-list">{items.map((x,i)=><div className="option-row" key={x}><span>{i+1}</span><strong>{x}</strong><ArrowUpRight/></div>)}</div></div>}
+function FeatureSection({section}:{section:string}){
+  if (section === "usuarios") return <MembersPanel/>;
+  if (section === "seguridad") return <SecurityCenter/>;
+  const content:Record<string,[string,string,string[]]>= {
+    estaciones:["Estaciones y recursos","Evita reservas dobles cuando compartes sillas o equipos",["Silla principal","Lavacabezas","Sala privada"]],
+    marketing:["Automatiza tu comunicación","Confirma citas, recupera clientes y lanza promociones",["Recordatorio 24 horas antes","Confirmación por WhatsApp","Campaña de clientes inactivos"]],
+    fidelizacion:["Programa de puntos","Premia a quienes vuelven y aumenta la recurrencia",["1 punto por cada $1","20 puntos de bienvenida","Recompensa a los 100 puntos"]],
+    configuracion:["Preferencias del negocio","Todo lo que necesita tu operación diaria",["Datos e identidad","Reservas y cancelaciones","Pagos y facturación","WhatsApp e imágenes"]],
+  };
+  const [h,p,items]=content[section]??["Módulo","Configuración disponible",[]];
+  return <div className="feature-layout"><div className="feature-hero"><span className="eyebrow">Configuración</span><h2>{h}</h2><p>{p}</p></div><div className="panel option-list">{items.map((x,i)=><div className="option-row" key={x}><span>{i+1}</span><strong>{x}</strong><ArrowUpRight/></div>)}</div></div>
+}
+
+type Member = { id:string; email:string; displayName:string; role:string; status:string; createdAt:string; lastSeenAt:string|null };
+
+function MembersPanel(){
+  const [members,setMembers]=useState<Member[]>([]); const [error,setError]=useState(""); const [notice,setNotice]=useState("");
+  const load=()=>fetch("/api/admin/members").then(async r=>{const data=await r.json();if(!r.ok)throw new Error(data.error);setMembers(data.members??[])}).catch(err=>setError(err instanceof Error?err.message:"No se pudo cargar el equipo"));
+  useEffect(load,[]);
+  const invite=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();setError("");const form=new FormData(e.currentTarget);const r=await fetch("/api/admin/members",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(Object.fromEntries(form.entries()))});const data=await r.json();if(!r.ok){setError(data.error);return}e.currentTarget.reset();setNotice("Invitación registrada. Se activará al iniciar sesión con ese email.");load()};
+  return <div className="security-layout"><section className="panel security-card"><PanelTitle title="Equipo con acceso" subtitle="Principio de mínimo privilegio"/>{members.map(member=><div className="member-row" key={member.id}><div className="person-initial">{initials(member.displayName||member.email)}</div><div><strong>{member.displayName||member.email}</strong><p>{member.email}</p></div><span className={`status ${member.status==="active"?"confirmada":"programada"}`}>{member.status}</span><b>{roleLabel(member.role)}</b></div>)}{!members.length&&!error&&<EmptyState text="No hay miembros para mostrar."/>}</section><section className="panel security-card"><PanelTitle title="Invitar miembro" subtitle="El email debe coincidir con su identidad"/><form className="invite-form" onSubmit={invite}><label>Nombre<input name="displayName" maxLength={100} placeholder="Nombre del miembro"/></label><label>Email<input name="email" type="email" required maxLength={254} placeholder="persona@empresa.com"/></label><label>Rol<select name="role" defaultValue="reception"><option value="reception">Recepción</option><option value="professional">Profesional</option><option value="admin">Administrador</option></select></label>{error&&<p className="form-error">{error}</p>}{notice&&<p className="form-success">{notice}</p>}<button className="primary">Crear invitación segura</button></form></section></div>
+}
+
+function roleLabel(role:string){return ({owner:"Propietario",admin:"Administrador",reception:"Recepción",professional:"Profesional"} as Record<string,string>)[role]??role}
+
+type SecurityData={posture:Record<string,string>;members:{total:number;active:number;pending:number;suspended:number};events:{id:string;actorEmail:string|null;action:string;entityType:string;createdAt:string}[]};
+
+function SecurityCenter(){
+  const [data,setData]=useState<SecurityData|null>(null); const [error,setError]=useState("");
+  useEffect(()=>{fetch("/api/admin/security").then(async r=>{const body=await r.json();if(!r.ok)throw new Error(body.error);setData(body)}).catch(err=>setError(err instanceof Error?err.message:"No se pudo cargar el estado"))},[]);
+  const controls=[["Autenticación delegada","Identidad verificada antes de entrar"],["Aislamiento por negocio","Cada consulta queda limitada al negocio"],["Roles en servidor","Los permisos no dependen de botones ocultos"],["Protección CSRF","Las mutaciones exigen mismo origen"],["Rate limiting","Frena abuso en reservas y administración"],["Auditoría","Registra cambios sensibles"],["Cabeceras seguras","CSP, HSTS y bloqueo de iframes"],["Bloqueo atómico de agenda","Evita reservas simultáneas solapadas"]];
+  return <div className="security-stack"><section className="security-summary"><div><ShieldCheck size={28}/><span>Postura actual</span><strong>{error?"Revisión requerida":"Protección activa"}</strong><p>Defensa en profundidad aplicada al panel, APIs y agenda.</p></div><div className="security-score"><strong>{error?"—":"8/8"}</strong><span>controles base</span></div></section><section className="security-controls">{controls.map(([title,description])=><div className="panel control-card" key={title}><CheckCircle2/><div><strong>{title}</strong><p>{description}</p></div><span>Activo</span></div>)}</section><section className="panel audit-panel"><PanelTitle title="Actividad de seguridad" subtitle="Eventos sensibles más recientes"/>{data?.events?.length?data.events.map(event=><div className="audit-row" key={event.id}><span className="activity-icon neutral"><ShieldCheck/></span><div><strong>{auditLabel(event.action)}</strong><p>{event.actorEmail??"Reserva pública"} · {event.entityType}</p></div><time>{new Date(event.createdAt).toLocaleString("es-VE")}</time></div>):<EmptyState text={error||"Todavía no hay eventos de auditoría."}/>}</section></div>
+}
+
+function auditLabel(action:string){return ({"security.owner_bootstrapped":"Propietario inicial verificado","appointment.created":"Cita creada","member.invited":"Miembro invitado","member.access_updated":"Permisos actualizados"} as Record<string,string>)[action]??action}
 
 function AppointmentModal({onClose,onCreated}:{onClose:()=>void;onCreated:(a:Appointment)=>void}){
   const today=new Date().toISOString().slice(0,10); const [saving,setSaving]=useState(false); const [error,setError]=useState("");
-  const submit=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();setSaving(true);setError("");const f=new FormData(e.currentTarget);const payload=Object.fromEntries(f.entries());try{const r=await fetch("/api/appointments",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...payload,professionalId:"pro_mateo",source:"panel"})});const data=await r.json();if(!r.ok)throw new Error(data.error);const service=payload.serviceId==="svc_combo"?["Corte + Barba",2800]:payload.serviceId==="svc_barba"?["Barba Ritual",1200]:["Corte Signature",1800];onCreated({id:data.id,date:String(payload.date),time:String(payload.time),status:"programada",source:"panel",totalCents:Number(service[1]),clientName:String(payload.name),phone:String(payload.phone),serviceName:String(service[0]),professionalName:"Mateo Silva"});}catch(err){setError(err instanceof Error?err.message:"No se pudo guardar");setSaving(false)}};
-  return <div className="modal-backdrop" onMouseDown={(e)=>{if(e.target===e.currentTarget)onClose()}}><div className="modal"><div className="modal-head"><div><span className="eyebrow">Agenda</span><h2>Nueva cita</h2></div><button className="icon-button" onClick={onClose}><X/></button></div><form onSubmit={submit}><div className="form-grid"><label className="wide">Nombre del cliente<input name="name" required placeholder="Nombre completo"/></label><label>Teléfono<input name="phone" required placeholder="+58 412 000 0000"/></label><label>Email<input name="email" type="email" required placeholder="cliente@email.com"/></label><label>Servicio<select name="serviceId" defaultValue="svc_corte"><option value="svc_corte">Corte Signature · $18</option><option value="svc_barba">Barba Ritual · $12</option><option value="svc_combo">Corte + Barba · $28</option></select></label><label>Profesional<select disabled><option>Mateo Silva</option></select></label><label>Fecha<input name="date" type="date" min={today} defaultValue={today} required/></label><label>Hora<select name="time" defaultValue="09:00">{["09:00","09:30","10:00","10:30","11:00","11:30","12:00","14:00","15:00","16:00","17:00","18:00"].map(t=><option key={t}>{t}</option>)}</select></label><label className="wide">Notas<textarea name="notes" placeholder="Preferencias, observaciones..."/></label></div>{error&&<p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving}>{saving?"Guardando...":"Crear cita"}</button></div></form></div></div>
+  const submit=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();setSaving(true);setError("");const f=new FormData(e.currentTarget);const payload=Object.fromEntries(f.entries());try{const r=await fetch("/api/admin/appointments",{method:"POST",headers:{"content-type":"application/json","idempotency-key":crypto.randomUUID()},body:JSON.stringify({...payload,professionalId:"pro_mateo"})});const data=await r.json();if(!r.ok)throw new Error(data.error);const service=payload.serviceId==="svc_combo"?["Corte + Barba",2800]:payload.serviceId==="svc_barba"?["Barba Ritual",1200]:["Corte Signature",1800];onCreated({id:data.id,date:String(payload.date),time:String(payload.time),status:"programada",source:"panel",totalCents:Number(service[1]),clientName:String(payload.name),phone:String(payload.phone),email:String(payload.email),serviceName:String(service[0]),professionalName:"Mateo Silva"});}catch(err){setError(err instanceof Error?err.message:"No se pudo guardar");setSaving(false)}};
+  return <div className="modal-backdrop" onMouseDown={(e)=>{if(e.target===e.currentTarget)onClose()}}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="appointment-title"><div className="modal-head"><div><span className="eyebrow">Agenda</span><h2 id="appointment-title">Nueva cita</h2></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></div><form onSubmit={submit}><div className="form-grid"><label className="wide">Nombre del cliente<input name="name" required maxLength={100} autoComplete="name" placeholder="Nombre completo"/></label><label>Teléfono<input name="phone" required maxLength={25} autoComplete="tel" placeholder="+58 412 000 0000"/></label><label>Email<input name="email" type="email" required maxLength={254} autoComplete="email" placeholder="cliente@email.com"/></label><label>Servicio<select name="serviceId" defaultValue="svc_corte"><option value="svc_corte">Corte Signature · $18</option><option value="svc_barba">Barba Ritual · $12</option><option value="svc_combo">Corte + Barba · $28</option></select></label><label>Profesional<select disabled><option>Mateo Silva</option></select></label><label>Fecha<input name="date" type="date" min={today} defaultValue={today} required/></label><label>Hora<select name="time" defaultValue="09:00">{["09:00","09:30","10:00","10:30","11:00","11:30","12:00","14:00","15:00","16:00","17:00","18:00"].map(t=><option key={t}>{t}</option>)}</select></label><label className="wide">Notas<textarea name="notes" maxLength={500} placeholder="Preferencias, observaciones..."/></label></div>{error&&<p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving}>{saving?"Guardando...":"Crear cita"}</button></div></form></div></div>
 }

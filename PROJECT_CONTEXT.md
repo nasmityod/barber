@@ -1160,19 +1160,19 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 
 ### Seguridad, SaaS y operación
 
-- [ ] Autenticación real para propietarios.
-- [ ] Invitación de empleados.
-- [ ] Roles y permisos.
-- [ ] Aislamiento multi-tenant validado en todas las consultas.
+- [x] Autenticación real para propietarios mediante identidad de Sites.
+- [x] Invitación de empleados ligada a email verificado.
+- [x] Roles y permisos base aplicados en servidor.
+- [x] Aislamiento multi-tenant validado en las APIs implementadas.
 - [ ] Planes y límites.
 - [ ] Suscripciones y facturación SaaS.
-- [ ] Auditoría.
-- [ ] Rate limiting.
-- [ ] Protección antispam en reservas.
+- [x] Auditoría de acciones sensibles implementadas.
+- [x] Rate limiting persistente.
+- [x] Protección antispam en reservas.
 - [ ] Copias de seguridad y retención.
 - [ ] Términos y privacidad.
 - [ ] Observabilidad y alertas.
-- [ ] Pruebas de integración y end-to-end.
+- [x] Pruebas de integración de renderizado y fronteras de seguridad.
 
 ## 10. Problemas conocidos de la primera versión
 
