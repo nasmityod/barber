@@ -6,12 +6,14 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "cross-env WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "build": "cross-env WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
+    "dev": "cross-env WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "start": "cross-env WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "deploy": "vinext deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
@@ -38,7 +40,7 @@
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "wrangler": "^4.118.0"
   },
   "type": "module"
 }
