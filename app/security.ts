@@ -6,16 +6,22 @@ export type Permission =
   | "appointments.read"
   | "appointments.write"
   | "clients.read"
+  | "clients.write"
+  | "services.read"
+  | "services.write"
+  | "professionals.read"
+  | "professionals.write"
   | "finance.read"
+  | "finance.write"
   | "settings.write"
   | "members.manage"
   | "audit.read";
 
 const ROLE_PERMISSIONS: Record<AdminRole, readonly Permission[]> = {
-  owner: ["appointments.read", "appointments.write", "clients.read", "finance.read", "settings.write", "members.manage", "audit.read"],
-  admin: ["appointments.read", "appointments.write", "clients.read", "finance.read", "settings.write", "members.manage", "audit.read"],
-  reception: ["appointments.read", "appointments.write", "clients.read"],
-  professional: ["appointments.read"],
+  owner: ["appointments.read", "appointments.write", "clients.read", "clients.write", "services.read", "services.write", "professionals.read", "professionals.write", "finance.read", "finance.write", "settings.write", "members.manage", "audit.read"],
+  admin: ["appointments.read", "appointments.write", "clients.read", "clients.write", "services.read", "services.write", "professionals.read", "professionals.write", "finance.read", "finance.write", "settings.write", "members.manage", "audit.read"],
+  reception: ["appointments.read", "appointments.write", "clients.read", "clients.write", "services.read", "professionals.read"],
+  professional: ["appointments.read", "services.read", "professionals.read"],
 };
 
 export type AdminContext = {
@@ -130,10 +136,8 @@ export function localDate(timezone: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
-export function weekdayForDate(date: string, timezone: string) {
-  const noon = new Date(`${date}T12:00:00Z`);
-  const name = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(noon);
-  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(name);
+export function weekdayForDate(date: string) {
+  return new Date(`${date}T12:00:00Z`).getUTCDay();
 }
 
 export async function sha256(value: string) {

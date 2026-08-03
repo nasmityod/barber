@@ -37,6 +37,8 @@ export async function POST(request: Request) {
     }
     if (role === "admin" && context.role !== "owner") throw new HttpError(403, "Solo el propietario puede invitar administradores.");
     const db = await ensureDatabase();
+    const plan = await db.prepare(`SELECT p.max_professionals AS maxProfessionals FROM subscriptions s JOIN plans p ON p.id=s.plan_id WHERE s.business_id=? AND s.status IN ('active','trialing')`).bind(context.businessId).first<{ maxProfessionals:number }>();
+    if (plan) { const count = await db.prepare("SELECT COUNT(*) AS total FROM business_members WHERE business_id=? AND status='active' AND role IN ('admin','reception','professional')").bind(context.businessId).first<{ total:number }>(); if ((count?.total ?? 0) >= plan.maxProfessionals) throw new HttpError(409, "Has alcanzado el límite de miembros de tu plan. Mejora el plan para agregar otro acceso."); }
     const id = crypto.randomUUID();
     const userId = `local:${crypto.randomUUID()}`;
     try {

@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { getSessionUser } from "../auth";
 import { LoginForm } from "../components/LoginForm";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,7 @@ export default async function LoginPage() {
           <h2>Bienvenido a Corteza</h2>
           <p>Inicia sesión con las credenciales privadas de tu barbería.</p>
           <LoginForm />
+          <p className="login-switch">¿Nuevo negocio? <Link href="/registro">Crea tu cuenta</Link></p>
           <div className="login-security"><ShieldCheck /><span><b>Acceso propio de Corteza</b><small>Sesión cifrada, protección contra intentos repetidos y permisos por rol.</small></span></div>
         </div>
       </section>

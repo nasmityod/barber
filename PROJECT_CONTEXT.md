@@ -32,6 +32,7 @@ Estado de Corteza al 1 de agosto de 2026:
 5. La cita, el cliente, el cobro y el profesional deben estar relacionados.
 6. Las acciones que afecten dinero, permisos o comunicaciones deben generar auditoría.
 7. El diseño debe sentirse contemporáneo y profesional, sin beige ni estética genérica de plantilla.
+8. La autenticación es propia de Corteza sobre Cloudflare Workers y D1. No usar inicio de sesión, OAuth ni identidad de ChatGPT/OpenAI.
 
 ## 3. Alcance observado en Nexora
 
@@ -933,7 +934,15 @@ pendiente | enviado -> fallido
 - `/` redirige a `/dashboard`.
 - `/:section` carga las vistas administrativas.
 - `/reservar/:slug` carga la experiencia pública.
-- `/api/appointments` expone GET y POST.
+- `/api/admin/appointments` gestiona creación, lectura, edición, reprogramación y estados con sesión propia y permisos; su lectura admite rangos de hasta 62 días para la agenda.
+- `/api/admin/availability` calcula horarios para editar una cita sin tratar la propia reserva como una colisión.
+- `/api/admin/time-blocks` gestiona la edición del horario semanal y los bloqueos persistentes, con validación de citas futuras.
+- `/api/admin/cash` gestiona apertura, cobros parciales por método, anulaciones y cierre de caja con arqueo persistente.
+- `/api/admin/clients` gestiona el directorio persistente, edición, eliminación segura e historial real por cliente.
+- `/api/admin/services` gestiona el catálogo persistente, activación, edición y eliminación segura por negocio.
+- `/api/admin/professionals` gestiona el equipo persistente, sus servicios asignados, datos de contacto, activación, métricas y eliminación segura por negocio.
+- `/api/public/catalog`, `/api/public/availability` y `/api/public/bookings` sirven la reserva pública.
+- `/api/appointments` permanece retirado para proteger la frontera de datos anterior.
 
 Slugs administrativos actuales:
 
@@ -961,6 +970,8 @@ Tablas actuales:
 - `professionals`
 - `clients`
 - `appointments`
+- `cash_sessions`
+- `payments`
 
 Índices:
 
@@ -977,12 +988,13 @@ Datos iniciales:
 
 ### 7.4 API de citas implementada
 
-`GET /api/appointments`
+`GET /api/admin/appointments`
 
 - Inicializa esquema y datos mínimos cuando es necesario.
 - Devuelve citas con cliente, servicio y profesional.
+- Admite `from` y `to` para cargar únicamente el período visible.
 
-`POST /api/appointments`
+`POST /api/admin/appointments`
 
 - Valida campos requeridos.
 - Verifica servicio activo.
@@ -991,7 +1003,32 @@ Datos iniciales:
 - Calcula hora final desde la duración.
 - Guarda origen `panel` u `online`.
 
-Limitación actual: la prevención de colisiones solo compara la hora inicial exacta. Debe evolucionar a detección de rangos solapados.
+`PUT /api/admin/appointments`
+
+- Edita cliente, servicio, profesional, fecha, hora y notas.
+- Recalcula duración, precio y slots atómicos.
+- Rechaza horarios fuera de disponibilidad, bloqueados o solapados.
+- Mantiene el aislamiento por negocio y registra el cambio en auditoría.
+
+`PATCH /api/admin/appointments`
+
+- Aplica transiciones de estado permitidas en servidor.
+- Exige y persiste un motivo cuando la cita se cancela.
+- Libera los slots al cancelar o marcar inasistencia y audita la transición.
+
+La prevención de colisiones valida el rango completo, respeta horarios y bloqueos, y usa guardas atómicas en D1 para impedir carreras entre reservas concurrentes.
+
+La API administrativa de horarios y bloqueos permite editar la semana laboral, crea y elimina ausencias futuras, rechaza cambios que entren en conflicto con citas activas y audita cada cambio.
+
+La API administrativa de clientes lista métricas agregadas desde citas reales, crea y edita perfiles, devuelve el historial individual y solo permite eliminar registros sin citas relacionadas. Las escrituras requieren permiso explícito y quedan auditadas.
+
+La caja administrativa mantiene una única sesión abierta por negocio, vincula cada cobro con su cita y sesión, admite efectivo, tarjeta, transferencia y pago móvil, impide sobrepagos de forma atómica y registra anulaciones y cierres en auditoría.
+
+La API administrativa de profesionales crea perfiles con horarios iniciales y servicios asignados, permite editarlos, activarlos o desactivarlos y calcula sus métricas desde citas reales. Conserva cualquier profesional con citas o bloqueos relacionados y audita todas las escrituras.
+
+El catálogo y la disponibilidad pública solo ofrecen combinaciones válidas entre servicios y profesionales activos. La relación muchos-a-muchos se persiste por negocio y evita asignaciones cruzadas entre negocios.
+
+La agenda administrativa ofrece vistas diaria, semanal y mensual basadas únicamente en citas persistidas. Incluye navegación por períodos, botón Hoy, filtro por profesional, estados visuales, contadores del rango visible y reprogramación por arrastre. Clic o teclado abren el editor como alternativa accesible.
 
 ### 7.5 Despliegue
 
@@ -1076,23 +1113,23 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 - [x] Crear o reutilizar cliente por email.
 - [x] Calcular hora final.
 - [x] Evitar duplicado exacto de horario.
-- [ ] Solapamiento real por rango de tiempo.
-- [ ] Disponibilidad calculada desde horarios.
-- [ ] Bloqueos persistentes.
-- [ ] Vista diaria y mensual real.
-- [ ] Arrastrar y reprogramar.
-- [ ] Editar cita.
-- [ ] Cancelar con motivo.
-- [ ] Estados y transiciones.
-- [ ] Citas recurrentes persistentes.
-- [ ] Auditoría de cambios.
+- [x] Solapamiento real por rango de tiempo.
+- [x] Disponibilidad calculada desde horarios.
+- [x] Bloqueos persistentes.
+- [x] Vista diaria y mensual real.
+- [x] Arrastrar y reprogramar.
+- [x] Editar cita.
+- [x] Cancelar con motivo.
+- [x] Estados y transiciones.
+- [x] Citas recurrentes persistentes, con frecuencias semanal, quincenal y mensual.
+- [x] Auditoría de cambios.
 
 ### Clientes
 
 - [x] Entidad básica y creación automática.
 - [x] Vista inicial de clientes.
-- [ ] CRUD completo.
-- [ ] Historial por cliente.
+- [x] CRUD completo.
+- [x] Historial por cliente.
 - [ ] Importación CSV real.
 - [ ] Exportación real.
 - [ ] Preferencias y etiquetas.
@@ -1103,11 +1140,11 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 
 - [x] Entidad básica y datos de demostración.
 - [x] Vista inicial.
-- [ ] CRUD persistente.
+- [x] CRUD persistente.
 - [ ] Categorías persistentes.
 - [ ] Imágenes en R2.
-- [ ] Relación muchos-a-muchos con profesionales.
-- [ ] Activar o desactivar.
+- [x] Relación muchos-a-muchos con profesionales.
+- [x] Activar o desactivar.
 - [ ] Apartados por servicio.
 - [ ] Variantes de precio o duración.
 
@@ -1116,10 +1153,11 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 - [x] Entidad básica y perfil de demostración.
 - [x] Vista de equipo.
 - [x] Vista visual de horario semanal.
-- [ ] CRUD persistente.
-- [ ] Horario persistente.
-- [ ] Bloqueos y vacaciones.
-- [ ] Servicios por profesional.
+- [x] CRUD persistente.
+- [x] Horario persistente.
+- [x] Edición administrativa del horario semanal.
+- [x] Bloqueos y vacaciones.
+- [x] Servicios por profesional.
 - [ ] Comisiones.
 - [ ] Alquiler de silla.
 - [ ] Disponibilidad por sucursal.
@@ -1127,17 +1165,17 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 ### Caja y finanzas
 
 - [x] Interfaz inicial de caja.
-- [ ] Sesión de caja real.
-- [ ] Apertura y cierre.
-- [ ] Cobro de cita.
-- [ ] Pagos parciales.
-- [ ] Métodos de pago.
-- [ ] Propinas.
-- [ ] Gastos.
-- [ ] Productos.
-- [ ] Inventario.
-- [ ] Reembolsos.
-- [ ] Factura o recibo.
+- [x] Sesión de caja real.
+- [x] Apertura y cierre.
+- [x] Cobro de cita.
+- [x] Pagos parciales.
+- [x] Métodos de pago.
+- [x] Propinas.
+- [x] Gastos.
+- [x] Productos.
+- [x] Inventario.
+- [x] Reembolsos.
+- [x] Factura o recibo.
 - [ ] Exportación financiera.
 
 ### Marketing y experiencia pública
@@ -1176,18 +1214,18 @@ Limitación actual: la prevención de colisiones solo compara la hora inicial ex
 
 ## 10. Problemas conocidos de la primera versión
 
-1. Algunas métricas y registros visibles son datos de demostración en el cliente.
-2. Las citas reales de D1 se mezclan con datos semilla visuales en ciertas vistas.
+1. El módulo de clientes y sus métricas ya usan D1; otras vistas comerciales todavía conservan datos de demostración.
+2. Las vistas operativas de agenda y citas ya usan D1; algunos módulos futuros todavía muestran estructuras demostrativas.
 3. El acceso usa credenciales propias de Corteza; todavía no existe recuperación automática por email.
 4. La reserva pública y el panel se sirven desde el mismo Worker, con autorización aplicada solo al panel y sus APIs.
-5. Las fechas visibles de demostración están fijadas en agosto de 2026.
-6. Solo el backend de citas está operativo.
+5. La agenda ya calcula sus períodos desde la fecha y zona horaria del negocio.
+6. Autenticación, miembros, citas, clientes, servicios, profesionales, disponibilidad, horarios y bloqueos tienen backend operativo; otros módulos comerciales siguen pendientes.
 7. Los demás botones pueden ser demostrativos.
-8. La API usa un negocio fijo `biz_demo`; aún no resuelve el negocio desde slug o sesión.
-9. La validación de disponibilidad no comprueba solapamientos por duración.
-10. No hay relación persistente muchos-a-muchos entre servicios y profesionales.
+8. Las APIs administrativas resuelven el negocio desde la sesión; el catálogo público lo resuelve por slug.
+9. Los horarios persistentes se leen y editan desde D1; cualquier cambio que deje citas futuras fuera del horario se rechaza.
+10. Los servicios por profesional se persisten como relación muchos-a-muchos y se aplican al catálogo, la disponibilidad y los formularios de citas.
 11. No hay almacenamiento R2 para imágenes.
-12. No hay pagos, caja, mensajes ni exportaciones reales.
+12. Pagos, caja, propinas, gastos, POS, inventario, reembolsos y recibos ya son persistentes; mensajería y exportaciones financieras reales siguen pendientes.
 
 La tarjeta social beige de la primera versión fue reemplazada por una variante en grafito, azul, cian, violeta y blanco.
 
@@ -1282,18 +1320,25 @@ Orden sugerido:
 2. Confirmar nombre final y paleta con el usuario.
 3. Eliminar definitivamente datos visuales ficticios o marcarlos como demostración.
 4. Implementar autenticación y multi-tenancy.
-5. Implementar CRUD real de servicios, profesionales y clientes.
-6. Implementar horarios y bloqueos persistentes.
-7. Reescribir el motor de disponibilidad con detección de rangos solapados.
+5. CRUD real de servicios, clientes y profesionales, incluyendo servicios por profesional, completado.
+6. Edición administrativa de horarios persistentes y gestión de bloqueos completadas.
+7. Reprogramación, edición, cancelación con motivo y citas recurrentes completadas.
 8. Hacer pública únicamente la ruta de reserva o separar panel y catálogo por políticas de acceso.
-9. Integrar estados de cita y cobro.
-10. Continuar con caja y mensajería.
+9. Estados de cita y cobro, pagos parciales y apertura/cierre de caja completados.
+10. Continuar con gastos y mensajería.
 
 ## 14. Archivos clave
 
 - `app/components/AdminApp.tsx` — panel y módulos administrativos.
+- `app/calendar.ts` — cálculos de fechas y rangos para la agenda.
 - `app/components/BookingApp.tsx` — catálogo y wizard público.
-- `app/api/appointments/route.ts` — lectura y creación de citas.
+- `app/api/admin/appointments/route.ts` — lectura por rango, creación, edición, reprogramación y estados de citas protegidas.
+- `app/api/admin/cash/route.ts` — apertura, cobros, anulaciones y cierre de caja protegidos.
+- `app/components/CashManager.tsx` — operación diaria y arqueo de caja.
+- `app/api/admin/commerce/route.ts` — productos, POS, inventario, gastos y reembolsos protegidos.
+- `app/api/admin/receipts/route.ts` — recibos HTML imprimibles para citas y ventas POS.
+- `app/components/CommerceManager.tsx` — pestañas de POS, inventario, gastos, reembolsos y recibos.
+- `app/api/admin/professionals/route.ts` — CRUD persistente del equipo, activación, métricas y eliminación protegida.
 - `db/schema.ts` — esquema Drizzle actual.
 - `db/init.ts` — creación y semillas D1.
 - `app/globals.css` — sistema visual completo.
@@ -1317,14 +1362,14 @@ npm run db:generate
 El sistema no debe considerarse listo para producción comercial hasta que:
 
 - [ ] Un negocio pueda registrarse y configurar su cuenta.
-- [ ] Pueda invitar empleados con permisos.
-- [ ] Pueda crear servicios, profesionales, horarios y bloqueos.
-- [ ] Un cliente pueda reservar según disponibilidad real.
-- [ ] No existan solapamientos de tiempo ni recursos.
-- [ ] La barbería pueda confirmar, atender, completar o cancelar.
-- [ ] Pueda cobrar y cerrar caja.
-- [ ] Existan reportes basados únicamente en datos reales.
+- [x] Pueda invitar empleados con permisos.
+- [x] Pueda crear servicios, profesionales, horarios y bloqueos.
+- [x] Un cliente pueda reservar según disponibilidad real.
+- [x] No existan solapamientos de tiempo ni recursos.
+- [x] La barbería pueda confirmar, atender, completar o cancelar.
+- [x] Pueda cobrar y cerrar caja.
+- [x] Existan reportes basados únicamente en datos reales.
 - [ ] Los mensajes tengan consentimiento, trazabilidad y reintentos.
-- [ ] Los datos estén aislados por negocio.
+- [x] Los datos estén aislados por negocio.
 - [ ] Existan auditoría, rate limiting y pruebas end-to-end.
-- [ ] La reserva pública sea accesible para clientes y el panel permanezca protegido.
+- [x] La reserva pública sea accesible para clientes y el panel permanezca protegido.

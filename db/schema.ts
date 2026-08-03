@@ -1,4 +1,5 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const businesses = sqliteTable("businesses", {
   id: text("id").primaryKey(),
@@ -6,7 +7,22 @@ export const businesses = sqliteTable("businesses", {
   slug: text("slug").notNull().unique(),
   timezone: text("timezone").notNull().default("America/Caracas"),
   currency: text("currency").notNull().default("USD"),
+  ownerEmail: text("owner_email"),
+  createdAt: text("created_at"),
 });
+
+export const plans = sqliteTable("plans", {
+  id: text("id").primaryKey(), name: text("name").notNull(), description: text("description").notNull().default(""),
+  monthlyPriceCents: integer("monthly_price_cents").notNull().default(0), maxProfessionals: integer("max_professionals").notNull().default(1),
+  maxAppointments: integer("max_appointments").notNull().default(100), active: integer("active", { mode: "boolean" }).notNull().default(true),
+});
+
+export const subscriptions = sqliteTable("subscriptions", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), planId: text("plan_id").notNull(),
+  status: text("status").notNull().default("trialing"), provider: text("provider").notNull().default("manual"),
+  currentPeriodStart: text("current_period_start").notNull(), currentPeriodEnd: text("current_period_end").notNull(),
+  cancelAtPeriodEnd: integer("cancel_at_period_end", { mode: "boolean" }).notNull().default(false), createdAt: text("created_at").notNull(),
+}, (table) => [uniqueIndex("idx_subscriptions_business").on(table.businessId), index("idx_subscriptions_status").on(table.status)]);
 
 export const services = sqliteTable("services", {
   id: text("id").primaryKey(),
@@ -16,7 +32,7 @@ export const services = sqliteTable("services", {
   durationMinutes: integer("duration_minutes").notNull(),
   priceCents: integer("price_cents").notNull(),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
-});
+}, (table) => [uniqueIndex("idx_services_business_name").on(table.businessId, table.name)]);
 
 export const professionals = sqliteTable("professionals", {
   id: text("id").primaryKey(),
@@ -26,6 +42,20 @@ export const professionals = sqliteTable("professionals", {
   email: text("email"),
   phone: text("phone"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+}, (table) => [uniqueIndex("idx_professionals_business_name").on(table.businessId, table.name)]);
+
+export const professionalServices = sqliteTable("professional_services", {
+  businessId: text("business_id").notNull(),
+  professionalId: text("professional_id").notNull(),
+  serviceId: text("service_id").notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.businessId, table.professionalId, table.serviceId] }),
+  index("idx_professional_services_service").on(table.businessId, table.serviceId),
+]);
+
+export const runtimeMigrations = sqliteTable("runtime_migrations", {
+  key: text("key").primaryKey(),
+  appliedAt: text("applied_at").notNull(),
 });
 
 export const clients = sqliteTable("clients", {
@@ -37,6 +67,27 @@ export const clients = sqliteTable("clients", {
   notes: text("notes").notNull().default(""),
   createdAt: text("created_at").notNull(),
 }, (table) => [uniqueIndex("idx_clients_business_email").on(table.businessId, table.email)]);
+
+export const recurringAppointmentSeries = sqliteTable("recurring_appointment_series", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  clientId: text("client_id").notNull(),
+  serviceId: text("service_id").notNull(),
+  professionalId: text("professional_id").notNull(),
+  frequency: text("frequency").notNull(),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  startTime: text("start_time").notNull(),
+  notes: text("notes").notNull().default(""),
+  status: text("status").notNull().default("active"),
+  idempotencyHash: text("idempotency_hash").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("idx_recurring_series_idempotency").on(table.businessId, table.idempotencyHash),
+  index("idx_recurring_series_business_status").on(table.businessId, table.status, table.startDate),
+]);
 
 export const appointments = sqliteTable("appointments", {
   id: text("id").primaryKey(),
@@ -50,12 +101,230 @@ export const appointments = sqliteTable("appointments", {
   status: text("status").notNull().default("programada"),
   source: text("source").notNull().default("panel"),
   notes: text("notes").notNull().default(""),
+  cancellationReason: text("cancellation_reason").notNull().default(""),
+  recurringSeriesId: text("recurring_series_id"),
+  occurrenceNumber: integer("occurrence_number"),
   totalCents: integer("total_cents").notNull(),
   createdAt: text("created_at").notNull(),
 }, (table) => [
   index("idx_appointments_business_date").on(table.businessId, table.appointmentDate, table.startTime),
   index("idx_appointments_professional_slot").on(table.professionalId, table.appointmentDate, table.startTime),
+  index("idx_appointments_recurring_series").on(table.businessId, table.recurringSeriesId, table.appointmentDate),
 ]);
+
+export const cashSessions = sqliteTable("cash_sessions", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  openedBy: text("opened_by").notNull(),
+  openedAt: text("opened_at").notNull(),
+  openingAmountCents: integer("opening_amount_cents").notNull().default(0),
+  status: text("status").notNull().default("open"),
+  closedBy: text("closed_by"),
+  closedAt: text("closed_at"),
+  expectedCashCents: integer("expected_cash_cents"),
+  countedCashCents: integer("counted_cash_cents"),
+  notes: text("notes").notNull().default(""),
+}, (table) => [
+  uniqueIndex("idx_cash_sessions_one_open").on(table.businessId).where(sql`${table.status} = 'open'`),
+  index("idx_cash_sessions_business_opened").on(table.businessId, table.openedAt),
+]);
+
+export const payments = sqliteTable("payments", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  appointmentId: text("appointment_id").notNull(),
+  cashSessionId: text("cash_session_id").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  method: text("method").notNull(),
+  status: text("status").notNull().default("completed"),
+  reference: text("reference").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+  voidedBy: text("voided_by"),
+  voidedAt: text("voided_at"),
+  voidReason: text("void_reason").notNull().default(""),
+  tipCents: integer("tip_cents").notNull().default(0),
+}, (table) => [
+  index("idx_payments_business_created").on(table.businessId, table.createdAt),
+  index("idx_payments_appointment").on(table.businessId, table.appointmentId),
+  index("idx_payments_cash_session").on(table.businessId, table.cashSessionId),
+]);
+
+export const products = sqliteTable("products", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  name: text("name").notNull(),
+  sku: text("sku").notNull().default(""),
+  category: text("category").notNull().default("General"),
+  priceCents: integer("price_cents").notNull(),
+  costCents: integer("cost_cents").notNull().default(0),
+  stockQuantity: integer("stock_quantity").notNull().default(0),
+  minimumStock: integer("minimum_stock").notNull().default(0),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("idx_products_business_sku").on(table.businessId, table.sku).where(sql`${table.sku} <> ''`),
+  index("idx_products_business_active").on(table.businessId, table.active, table.name),
+]);
+
+export const productSales = sqliteTable("product_sales", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  cashSessionId: text("cash_session_id").notNull(),
+  clientId: text("client_id"),
+  subtotalCents: integer("subtotal_cents").notNull(),
+  discountCents: integer("discount_cents").notNull().default(0),
+  totalCents: integer("total_cents").notNull(),
+  tipCents: integer("tip_cents").notNull().default(0),
+  method: text("method").notNull(),
+  status: text("status").notNull().default("completed"),
+  receiptNumber: text("receipt_number").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("idx_product_sales_receipt").on(table.businessId, table.receiptNumber),
+  index("idx_product_sales_business_created").on(table.businessId, table.createdAt),
+]);
+
+export const productSaleItems = sqliteTable("product_sale_items", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  saleId: text("sale_id").notNull(),
+  productId: text("product_id").notNull(),
+  productName: text("product_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+  lineTotalCents: integer("line_total_cents").notNull(),
+});
+
+export const inventoryMovements = sqliteTable("inventory_movements", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  productId: text("product_id").notNull(),
+  type: text("type").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitCostCents: integer("unit_cost_cents").notNull().default(0),
+  note: text("note").notNull().default(""),
+  referenceId: text("reference_id"),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("idx_inventory_movements_product_created").on(table.businessId, table.productId, table.createdAt),
+]);
+
+export const expenses = sqliteTable("expenses", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  cashSessionId: text("cash_session_id").notNull(),
+  category: text("category").notNull(),
+  description: text("description").notNull(),
+  vendor: text("vendor").notNull().default(""),
+  amountCents: integer("amount_cents").notNull(),
+  method: text("method").notNull(),
+  receiptNumber: text("receipt_number").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  status: text("status").notNull().default("completed"),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("idx_expenses_business_created").on(table.businessId, table.createdAt),
+]);
+
+export const refunds = sqliteTable("refunds", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  cashSessionId: text("cash_session_id").notNull(),
+  paymentId: text("payment_id"),
+  saleId: text("sale_id"),
+  amountCents: integer("amount_cents").notNull(),
+  method: text("method").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("completed"),
+  createdBy: text("created_by").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("idx_refunds_business_created").on(table.businessId, table.createdAt),
+  index("idx_refunds_payment").on(table.businessId, table.paymentId),
+]);
+
+export const receipts = sqliteTable("receipts", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  receiptNumber: text("receipt_number").notNull(),
+  appointmentId: text("appointment_id"),
+  saleId: text("sale_id"),
+  snapshot: text("snapshot").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("idx_receipts_business_number").on(table.businessId, table.receiptNumber),
+  index("idx_receipts_business_created").on(table.businessId, table.createdAt),
+]);
+
+export const promotions = sqliteTable("promotions", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), name: text("name").notNull(),
+  code: text("code").notNull(), kind: text("kind").notNull().default("percent"), value: integer("value").notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true), startsAt: text("starts_at").notNull(),
+  endsAt: text("ends_at").notNull(), maxUses: integer("max_uses").notNull().default(0),
+  usesCount: integer("uses_count").notNull().default(0), createdAt: text("created_at").notNull(),
+}, (table) => [uniqueIndex("idx_promotions_business_code").on(table.businessId, table.code)]);
+
+export const loyaltyAccounts = sqliteTable("loyalty_accounts", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), clientId: text("client_id").notNull(),
+  points: integer("points").notNull().default(0), tier: text("tier").notNull().default("base"), updatedAt: text("updated_at").notNull(),
+}, (table) => [uniqueIndex("idx_loyalty_business_client").on(table.businessId, table.clientId)]);
+
+export const loyaltyTransactions = sqliteTable("loyalty_transactions", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), clientId: text("client_id").notNull(),
+  points: integer("points").notNull(), reason: text("reason").notNull(), createdBy: text("created_by"), createdAt: text("created_at").notNull(),
+});
+
+export const reviews = sqliteTable("reviews", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), clientId: text("client_id"), appointmentId: text("appointment_id"),
+  rating: integer("rating").notNull(), comment: text("comment").notNull().default(""), status: text("status").notNull().default("pending"),
+  token: text("token").notNull(), createdAt: text("created_at").notNull(), publishedAt: text("published_at"),
+}, (table) => [uniqueIndex("idx_reviews_token").on(table.token)]);
+
+export const galleryItems = sqliteTable("gallery_items", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), title: text("title").notNull(), imageUrl: text("image_url").notNull(),
+  caption: text("caption").notNull().default(""), active: integer("active", { mode: "boolean" }).notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0), createdAt: text("created_at").notNull(),
+});
+
+export const waitlistEntries = sqliteTable("waitlist_entries", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), clientId: text("client_id"), name: text("name").notNull(),
+  email: text("email").notNull().default(""), phone: text("phone").notNull().default(""), serviceId: text("service_id"), professionalId: text("professional_id"),
+  preferredDate: text("preferred_date").notNull().default(""), preferredTime: text("preferred_time").notNull().default(""), status: text("status").notNull().default("waiting"),
+  notes: text("notes").notNull().default(""), createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
+});
+
+export const messageLogs = sqliteTable("message_logs", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), clientId: text("client_id"), appointmentId: text("appointment_id"),
+  channel: text("channel").notNull(), kind: text("kind").notNull(), recipient: text("recipient").notNull(), body: text("body").notNull(),
+  status: text("status").notNull().default("queued"), scheduledAt: text("scheduled_at").notNull(), sentAt: text("sent_at"), error: text("error").notNull().default(""), createdAt: text("created_at").notNull(),
+});
+
+export const paymentRequests = sqliteTable("payment_requests", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), appointmentId: text("appointment_id"), clientId: text("client_id"),
+  amountCents: integer("amount_cents").notNull(), depositCents: integer("deposit_cents").notNull().default(0), method: text("method").notNull().default("deposit"),
+  provider: text("provider").notNull().default("manual"), checkoutUrl: text("checkout_url").notNull().default(""), reference: text("reference").notNull().default(""),
+  status: text("status").notNull().default("pending"), token: text("token").notNull(), expiresAt: text("expires_at").notNull(), createdAt: text("created_at").notNull(), paidAt: text("paid_at"),
+}, (table) => [uniqueIndex("idx_payment_requests_token").on(table.token)]);
+
+export const passwordResetTokens = sqliteTable("password_reset_tokens", {
+  tokenHash: text("token_hash").primaryKey(), memberId: text("member_id").notNull(), businessId: text("business_id").notNull(),
+  expiresAt: text("expires_at").notNull(), createdAt: text("created_at").notNull(), usedAt: text("used_at"),
+}, (table) => [index("idx_password_reset_member").on(table.memberId), index("idx_password_reset_expires").on(table.expiresAt)]);
+
+export const termsAcceptances = sqliteTable("terms_acceptances", {
+  id: text("id").primaryKey(), memberId: text("member_id").notNull(), businessId: text("business_id").notNull(),
+  version: text("version").notNull(), ipHash: text("ip_hash").notNull().default(""), acceptedAt: text("accepted_at").notNull(),
+}, (table) => [uniqueIndex("idx_terms_member_version").on(table.memberId, table.version)]);
+
+export const alerts = sqliteTable("alerts", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), kind: text("kind").notNull(),
+  title: text("title").notNull(), message: text("message").notNull(), severity: text("severity").notNull().default("info"),
+  readAt: text("read_at"), createdAt: text("created_at").notNull(),
+}, (table) => [index("idx_alerts_business_created").on(table.businessId, table.createdAt)]);
 
 export const businessMembers = sqliteTable("business_members", {
   id: text("id").primaryKey(),

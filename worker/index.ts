@@ -39,7 +39,7 @@ function withSecurityHeaders(response: Response, request: Request) {
     "form-action 'self'",
     "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
     "connect-src 'self'",
     "manifest-src 'self'",

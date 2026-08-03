@@ -1,0 +1,1 @@
+ALTER TABLE `appointments` ADD `cancellation_reason` text DEFAULT '' NOT NULL;

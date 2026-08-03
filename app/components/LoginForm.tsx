@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { apiError, readJsonObject } from "./api-json";
 
@@ -22,5 +23,6 @@ export function LoginForm() {
     <label>Contraseña<span className="password-field"><input name="password" type={showPassword?"text":"password"} autoComplete="current-password" required minLength={8} maxLength={128} placeholder="Tu contraseña"/><button type="button" onClick={()=>setShowPassword((value)=>!value)} aria-label={showPassword?"Ocultar contraseña":"Mostrar contraseña"}>{showPassword?<EyeOff/>:<Eye/>}</button></span></label>
     {error&&<p className="form-error" role="alert">{error}</p>}
     <button className="login-button" disabled={saving}>{saving?"Verificando…":<>Entrar al dashboard <ArrowRight /></>}</button>
+    <Link className="login-recovery" href="/recuperar-clave">¿Olvidaste tu contraseña?</Link>
   </form>;
 }

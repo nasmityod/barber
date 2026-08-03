@@ -135,6 +135,33 @@ export async function setMemberPassword(db: D1Database, memberId: string, passwo
     .bind(memberId, passwordHash, salt, PASSWORD_ITERATIONS, mustChangePassword ? 1 : 0, new Date().toISOString()).run();
 }
 
+export async function createPasswordResetToken(db: D1Database, memberId: string, businessId: string) {
+  const raw = new Uint8Array(32); crypto.getRandomValues(raw);
+  const token = base64Url(raw);
+  const now = new Date();
+  const expires = new Date(now.getTime() + 30 * 60 * 1000).toISOString();
+  await db.batch([
+    db.prepare("DELETE FROM password_reset_tokens WHERE member_id = ? OR expires_at <= ?").bind(memberId, now.toISOString()),
+    db.prepare("INSERT INTO password_reset_tokens (token_hash,member_id,business_id,expires_at,created_at) VALUES (?,?,?,?,?)")
+      .bind(await sha256Hex(token), memberId, businessId, expires, now.toISOString()),
+  ]);
+  return { token, expiresAt: expires };
+}
+
+export async function resetPasswordWithToken(db: D1Database, token: string, newPassword: string) {
+  if (!/^[A-Za-z0-9_-]{40,80}$/u.test(token)) return null;
+  const row = await db.prepare(`SELECT token_hash AS tokenHash, member_id AS memberId, business_id AS businessId
+    FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > ? LIMIT 1`)
+    .bind(await sha256Hex(token), new Date().toISOString()).first<{ tokenHash:string;memberId:string;businessId:string }>();
+  if (!row) return null;
+  await setMemberPassword(db, row.memberId, newPassword, false);
+  await db.batch([
+    db.prepare("UPDATE password_reset_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL").bind(new Date().toISOString(), row.tokenHash),
+    db.prepare("DELETE FROM auth_sessions WHERE member_id = ?").bind(row.memberId),
+  ]);
+  return { memberId: row.memberId, businessId: row.businessId };
+}
+
 export async function changePassword(user: AuthUser, currentPassword: string, newPassword: string) {
   const verified = await authenticatePassword(user.email, currentPassword);
   if (!verified || verified.memberId !== user.memberId) return false;
