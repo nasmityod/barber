@@ -11,6 +11,43 @@ export const businesses = sqliteTable("businesses", {
   createdAt: text("created_at"),
 });
 
+export const businessSettings = sqliteTable("business_settings", {
+  businessId: text("business_id").primaryKey(),
+  country: text("country").notNull().default("VE"),
+  timeFormat: text("time_format").notNull().default("24h"),
+  paymentMethods: text("payment_methods").notNull().default("[\"cash\",\"card\",\"transfer\",\"mobile\"]"),
+  cancellationWindowHours: integer("cancellation_window_hours").notNull().default(24),
+  cancellationFeePercent: integer("cancellation_fee_percent").notNull().default(0),
+  allowClientCancellation: integer("allow_client_cancellation", { mode: "boolean" }).notNull().default(true),
+  businessPhone: text("business_phone").notNull().default(""),
+  businessEmail: text("business_email").notNull().default(""),
+  address: text("address").notNull().default(""),
+  whatsappNumber: text("whatsapp_number").notNull().default(""),
+  logoUrl: text("logo_url").notNull().default(""),
+  coverImageUrl: text("cover_image_url").notNull().default(""),
+  bookingLeadMinutes: integer("booking_lead_minutes").notNull().default(60),
+  bookingMaxDays: integer("booking_max_days").notNull().default(60),
+  requireConfirmation: integer("require_confirmation", { mode: "boolean" }).notNull().default(false),
+  showPrices: integer("show_prices", { mode: "boolean" }).notNull().default(true),
+  showGallery: integer("show_gallery", { mode: "boolean" }).notNull().default(true),
+  showReviews: integer("show_reviews", { mode: "boolean" }).notNull().default(true),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const bookingPageSettings = sqliteTable("booking_page_settings", {
+  businessId: text("business_id").primaryKey(),
+  headline: text("headline").notNull().default("Tu mejor versión empieza aquí."),
+  subtitle: text("subtitle").notNull().default("Elige un servicio, consulta disponibilidad real y confirma sin esperas."),
+  primaryColor: text("primary_color").notNull().default("#C6A15B"),
+  publicNote: text("public_note").notNull().default("Reserva online disponible todos los días."),
+  showServices: integer("show_services", { mode: "boolean" }).notNull().default(true),
+  showProfessionals: integer("show_professionals", { mode: "boolean" }).notNull().default(true),
+  showContact: integer("show_contact", { mode: "boolean" }).notNull().default(true),
+  showPolicies: integer("show_policies", { mode: "boolean" }).notNull().default(true),
+  sectionOrder: text("section_order").notNull().default('["services","gallery","reviews","contact"]'),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const plans = sqliteTable("plans", {
   id: text("id").primaryKey(), name: text("name").notNull(), description: text("description").notNull().default(""),
   monthlyPriceCents: integer("monthly_price_cents").notNull().default(0), maxProfessionals: integer("max_professionals").notNull().default(1),
@@ -58,6 +95,22 @@ export const runtimeMigrations = sqliteTable("runtime_migrations", {
   appliedAt: text("applied_at").notNull(),
 });
 
+export const resources = sqliteTable("resources", {
+  id: text("id").primaryKey(),
+  businessId: text("business_id").notNull(),
+  name: text("name").notNull(),
+  kind: text("kind").notNull().default("station"),
+  notes: text("notes").notNull().default(""),
+  serviceIds: text("service_ids").notNull().default("[]"),
+  professionalIds: text("professional_ids").notNull().default("[]"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("idx_resources_business_name").on(table.businessId, table.name),
+  index("idx_resources_business_active").on(table.businessId, table.active, table.name),
+]);
+
 export const clients = sqliteTable("clients", {
   id: text("id").primaryKey(),
   businessId: text("business_id").notNull(),
@@ -104,12 +157,38 @@ export const appointments = sqliteTable("appointments", {
   cancellationReason: text("cancellation_reason").notNull().default(""),
   recurringSeriesId: text("recurring_series_id"),
   occurrenceNumber: integer("occurrence_number"),
+  resourceId: text("resource_id"),
   totalCents: integer("total_cents").notNull(),
   createdAt: text("created_at").notNull(),
 }, (table) => [
   index("idx_appointments_business_date").on(table.businessId, table.appointmentDate, table.startTime),
   index("idx_appointments_professional_slot").on(table.professionalId, table.appointmentDate, table.startTime),
   index("idx_appointments_recurring_series").on(table.businessId, table.recurringSeriesId, table.appointmentDate),
+  index("idx_appointments_resource_slot").on(table.businessId, table.resourceId, table.appointmentDate, table.startTime),
+]);
+
+export const appointmentPortalTokens = sqliteTable("appointment_portal_tokens", {
+  tokenHash: text("token_hash").primaryKey(),
+  businessId: text("business_id").notNull(),
+  appointmentId: text("appointment_id").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  lastAccessedAt: text("last_accessed_at"),
+}, (table) => [
+  uniqueIndex("idx_appointment_portal_appointment").on(table.businessId, table.appointmentId),
+  index("idx_appointment_portal_expires").on(table.expiresAt),
+]);
+
+export const dayQueueEntries = sqliteTable("day_queue_entries", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), queueDate: text("queue_date").notNull(),
+  kind: text("kind").notNull().default("walk_in"), status: text("status").notNull().default("waiting"), position: integer("position").notNull().default(1),
+  appointmentId: text("appointment_id"), clientId: text("client_id").notNull(), serviceId: text("service_id"), professionalId: text("professional_id"),
+  arrivedAt: text("arrived_at").notNull(), startedAt: text("started_at"), finishedAt: text("finished_at"),
+  saleId: text("sale_id"), saleAmountCents: integer("sale_amount_cents").notNull().default(0), notes: text("notes").notNull().default(""),
+  createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("idx_day_queue_business_date").on(table.businessId, table.queueDate, table.position),
+  index("idx_day_queue_business_status").on(table.businessId, table.queueDate, table.status),
 ]);
 
 export const cashSessions = sqliteTable("cash_sessions", {
@@ -123,6 +202,8 @@ export const cashSessions = sqliteTable("cash_sessions", {
   closedAt: text("closed_at"),
   expectedCashCents: integer("expected_cash_cents"),
   countedCashCents: integer("counted_cash_cents"),
+  countedBreakdown: text("counted_breakdown").notNull().default(""),
+  closingSummary: text("closing_summary").notNull().default(""),
   notes: text("notes").notNull().default(""),
 }, (table) => [
   uniqueIndex("idx_cash_sessions_one_open").on(table.businessId).where(sql`${table.status} = 'open'`),
@@ -245,6 +326,43 @@ export const refunds = sqliteTable("refunds", {
 }, (table) => [
   index("idx_refunds_business_created").on(table.businessId, table.createdAt),
   index("idx_refunds_payment").on(table.businessId, table.paymentId),
+]);
+
+export const commissionRules = sqliteTable("commission_rules", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), name: text("name").notNull(),
+  scope: text("scope").notNull().default("default"), professionalId: text("professional_id"), serviceId: text("service_id"),
+  category: text("category"), kind: text("kind").notNull().default("percent"), value: integer("value").notNull().default(0),
+  priority: integer("priority").notNull().default(0), active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("idx_commission_rules_business_active").on(table.businessId, table.active, table.priority),
+  index("idx_commission_rules_professional").on(table.businessId, table.professionalId),
+  index("idx_commission_rules_service").on(table.businessId, table.serviceId),
+]);
+
+export const commissionBatches = sqliteTable("commission_batches", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), name: text("name").notNull(),
+  periodFrom: text("period_from"), periodTo: text("period_to"), status: text("status").notNull().default("paid"),
+  totalCents: integer("total_cents").notNull().default(0), commissionCount: integer("commission_count").notNull().default(0),
+  createdBy: text("created_by").notNull(), createdAt: text("created_at").notNull(), paidAt: text("paid_at"),
+}, (table) => [
+  index("idx_commission_batches_business_created").on(table.businessId, table.createdAt),
+  index("idx_commission_batches_business_status").on(table.businessId, table.status),
+]);
+
+export const commissions = sqliteTable("commissions", {
+  id: text("id").primaryKey(), businessId: text("business_id").notNull(), appointmentId: text("appointment_id").notNull(),
+  professionalId: text("professional_id").notNull(), serviceId: text("service_id").notNull(), ruleId: text("rule_id").notNull(),
+  sourcePaymentId: text("source_payment_id"), batchId: text("batch_id"), professionalName: text("professional_name").notNull(),
+  serviceName: text("service_name").notNull(), ruleName: text("rule_name").notNull(), kind: text("kind").notNull(),
+  value: integer("value").notNull(), basisCents: integer("basis_cents").notNull(), amountCents: integer("amount_cents").notNull(),
+  status: text("status").notNull().default("pending"), createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
+  paidAt: text("paid_at"), paidBy: text("paid_by"),
+}, (table) => [
+  uniqueIndex("idx_commissions_business_appointment").on(table.businessId, table.appointmentId),
+  index("idx_commissions_business_created").on(table.businessId, table.createdAt),
+  index("idx_commissions_business_status").on(table.businessId, table.status, table.createdAt),
+  index("idx_commissions_batch").on(table.businessId, table.batchId),
 ]);
 
 export const receipts = sqliteTable("receipts", {

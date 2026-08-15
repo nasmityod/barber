@@ -1,6 +1,7 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { runScheduledMaintenance } from "../app/scheduled";
 
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
@@ -26,6 +27,14 @@ const worker = {
 
     const response = await handler.fetch(request, env, ctx);
     return withSecurityHeaders(response, request);
+  },
+
+  async scheduled(_controller: ScheduledController, _env: CloudflareEnv, ctx: ExecutionContext) {
+    ctx.waitUntil(runScheduledMaintenance().then((result) => {
+      console.log("scheduled maintenance", JSON.stringify(result));
+    }).catch((error) => {
+      console.error("scheduled maintenance failed", error instanceof Error ? error.message : error);
+    }));
   },
 } satisfies ExportedHandler<CloudflareEnv>;
 

@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { apiError, isJsonObject, readJsonObject, stringArray } from "./api-json";
 import { CommerceManager } from "./CommerceManager";
 import { GrowthManager } from "./GrowthManager";
+import { SettingsPanel } from "./SettingsPanel";
+import { ResourcesManager } from "./ResourcesManager";
+import { ReportsManager } from "./ReportsManager";
+import { CommissionsManager } from "./CommissionsManager";
+import { DayShift } from "./DayShift";
 import {
   calendarDates, calendarRange, dateInTimeZone, shiftCalendarAnchor,
   startOfCalendarWeek, type CalendarView,
@@ -13,17 +19,17 @@ import {
   LayoutDashboard, Menu, Plus, Scissors, Search, Settings, Sparkles,
   Star, UserRound, UsersRound, WalletCards, X, CheckCircle2, TrendingUp,
   Armchair, Megaphone, ShieldCheck, ArrowUpRight, MoreHorizontal, LogOut,
-  CalendarOff, Trash2, Pencil, GripVertical, Upload, Download,
+  CalendarOff, Trash2, Pencil, GripVertical, Upload, Download, ListOrdered,
 } from "lucide-react";
 
 type Appointment = {
   id: string; clientId: string; date: string; time: string; endTime: string; status: string; source: string;
   totalCents: number; paidCents: number; paymentStatus: string; clientName: string; phone: string; email: string; notes: string; cancellationReason: string;
   serviceId: string; serviceName: string; professionalId: string; professionalName: string;
-  recurringSeriesId: string|null; occurrenceNumber: number|null;
+  recurringSeriesId: string|null; occurrenceNumber: number|null; resourceId?: string|null;
 };
 
-type AppointmentChanges = Partial<Pick<Appointment, "clientName"|"phone"|"email"|"notes"|"serviceId"|"professionalId"|"date"|"time">>;
+type AppointmentChanges = Partial<Pick<Appointment, "clientName"|"phone"|"email"|"notes"|"serviceId"|"professionalId"|"date"|"time"|"resourceId">>;
 
 type Service = { id:string; name:string; category:string; durationMinutes:number; priceCents:number; active?:number|boolean; appointmentCount?:number };
 type ManagedService = Service & { active:number|boolean; appointmentCount:number };
@@ -55,7 +61,8 @@ function isAppointment(value: unknown): value is Appointment {
   return ["id", "clientId", "date", "time", "endTime", "status", "source", "paymentStatus", "clientName", "phone", "email", "notes", "cancellationReason", "serviceId", "serviceName", "professionalId", "professionalName"]
     .every((key) => typeof value[key] === "string") && typeof value.totalCents === "number" && typeof value.paidCents === "number" &&
     (typeof value.recurringSeriesId === "string" || value.recurringSeriesId === null) &&
-    (typeof value.occurrenceNumber === "number" || value.occurrenceNumber === null);
+    (typeof value.occurrenceNumber === "number" || value.occurrenceNumber === null) &&
+    (value.resourceId === undefined || typeof value.resourceId === "string" || value.resourceId === null);
 }
 
 function isRecurringSeries(value:unknown):value is RecurringSeries {
@@ -135,7 +142,7 @@ type AdminIdentity = {
 
 const nav = [
   { label: "Principal", items: [
-    ["dashboard", "Inicio", LayoutDashboard], ["agenda", "Agenda", CalendarDays],
+    ["dashboard", "Inicio", LayoutDashboard], ["turno", "Turno del día", ListOrdered], ["agenda", "Agenda", CalendarDays],
     ["citas", "Citas", Clock3], ["clientes", "Clientes", UsersRound], ["caja", "Caja", WalletCards],
   ]},
   { label: "Gestión", items: [
@@ -143,7 +150,7 @@ const nav = [
     ["horarios", "Horarios", CalendarDays], ["estaciones", "Estaciones", Armchair],
   ]},
   { label: "Crecimiento", items: [
-    ["reportes", "Reportes", BarChart3], ["marketing", "Marketing", Megaphone],
+    ["reportes", "Reportes", BarChart3], ["comisiones", "Comisiones", CircleDollarSign], ["marketing", "Marketing", Megaphone],
     ["promociones", "Promociones", Star], ["fidelizacion", "Fidelización", Star], ["resenas", "Reseñas", Star], ["galeria", "Galería", Sparkles], ["espera", "Lista de espera", Clock3], ["pagos", "Pagos y depósitos", CircleDollarSign],
   ]},
   { label: "Sistema", items: [
@@ -153,16 +160,18 @@ const nav = [
 ] as const;
 
 const titles: Record<string, [string, string]> = {
-  dashboard: ["Tu barbería, bajo control", "El pulso de tu negocio, actualizado ahora"],
-  agenda: ["Agenda", "Organiza el día de todo tu equipo"], citas: ["Citas", "Gestiona reservas y estados"],
-  clientes: ["Clientes", "Historial, preferencias y recurrencia"], caja: ["Caja", "Cobros, gastos y cierre del día"],
-  servicios: ["Servicios", "Precios, duración y profesionales"], equipo: ["Equipo", "Profesionales y desempeño"],
+  dashboard: ["El piso de la barbería", "Citas, sillas y cobros de hoy"],
+  turno: ["Turno del día", "Cola, walk-ins y sillas en atención"],
+  "turno-del-dia": ["Turno del día", "Cola, walk-ins y sillas en atención"],
+  agenda: ["Agenda", "El día de todo el equipo, en un vistazo"], citas: ["Citas", "Reservas, estados y reprogramación"],
+  clientes: ["Clientes", "Historial, recurrencia y ticket"], caja: ["Caja y arqueo", "Cobra, cuadra el cajón y cierra el turno"],
+  servicios: ["Servicios", "Cortes, barbas, duración y precio"], equipo: ["Equipo", "Barberos, sillas y desempeño"],
   horarios: ["Horarios", "Disponibilidad semanal y bloqueos"], estaciones: ["Estaciones", "Sillas y recursos del local"],
-  reportes: ["Reportes", "Entiende el rendimiento del negocio"], marketing: ["Marketing", "Mensajes y promociones"],
-  fidelizacion: ["Fidelización", "Convierte visitas en clientes frecuentes"], configuracion: ["Configuración", "Preferencias del negocio y reservas"],
-  promociones: ["Promociones", "Códigos, descuentos y vigencias"], resenas: ["Reseñas", "Modera y publica la voz de tus clientes"], galeria: ["Galería", "Muestra el trabajo de tu barbería"], espera: ["Lista de espera", "Recupera oportunidades cuando se libera un horario"], pagos: ["Pagos y depósitos", "Solicita anticipos con trazabilidad"],
-  usuarios: ["Usuarios y roles", "Accesos seguros para tu equipo"],
-  seguridad: ["Centro de seguridad", "Identidad, permisos, auditoría y protección activa"], plan: ["Plan y suscripción", "Elige el plan que acompaña el crecimiento de tu negocio"],
+  reportes: ["Analítica", "Qué sillas venden, a qué hora y con qué ticket"], comisiones: ["Comisiones", "Reglas, liquidaciones y pagos al equipo"], marketing: ["Marketing", "Mensajes, recordatorios y campañas"],
+  fidelizacion: ["Fidelización", "Puntos que vuelven a la silla"], configuracion: ["Configuración", "Negocio, reservas y políticas"],
+  promociones: ["Promociones", "Códigos, descuentos y vigencias"], resenas: ["Reseñas", "La voz de tus clientes"], galeria: ["Galería", "El trabajo de la barbería"], espera: ["Lista de espera", "Recupera huecos cuando se libera un horario"], pagos: ["Pagos y depósitos", "Anticipos con trazabilidad"],
+  usuarios: ["Usuarios y roles", "Quién entra al piso y con qué permiso"],
+  seguridad: ["Centro de seguridad", "Identidad, permisos, auditoría y protección"], plan: ["Plan y suscripción", "El plan que acompaña el crecimiento"],
 };
 
 export function AdminApp({ section, identity }: { section: string; identity: AdminIdentity }) {
@@ -229,7 +238,7 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
       method: "PUT", headers: { "content-type": "application/json" },
       body: JSON.stringify({
         id: next.id, name: next.clientName, email: next.email, phone: next.phone, notes: next.notes,
-        serviceId: next.serviceId, professionalId: next.professionalId, date: next.date, time: next.time,
+        serviceId: next.serviceId, professionalId: next.professionalId, date: next.date, time: next.time, resourceId: next.resourceId,
       }),
     });
     const data = await readJsonObject(response);
@@ -245,7 +254,7 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
     <div className="admin-shell">
       {mobileOpen && <button className="mobile-scrim" aria-label="Cerrar menú" onClick={() => setMobileOpen(false)} />}
       <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
-        <div className="brand"><div className="brand-mark"><Scissors size={20} /></div><div><strong>CORTEZA</strong><span>studio manager</span></div></div>
+        <div className="brand"><div className="brand-mark" aria-hidden="true"><Scissors size={20} /></div><div><strong>CORTEZA</strong><span>barbería</span></div></div>
         <button className="mobile-close" onClick={() => setMobileOpen(false)} aria-label="Cerrar menú"><X size={20} /></button>
         <div className="workspace"><div className="avatar">{identity.businessName.slice(0, 2).toUpperCase()}</div><div><strong>{identity.businessName}</strong><span>Espacio protegido</span></div><ChevronDown size={16} /></div>
         <nav>
@@ -260,8 +269,8 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
         <header className="topbar">
           <button className="icon-button menu-button" onClick={() => setMobileOpen(true)} aria-label="Abrir menú"><Menu size={20} /></button>
           <div className="topbar-search"><Search size={17} /><input aria-label="Buscar" placeholder="Buscar cliente, cita o servicio..." /></div>
-          <a className="public-link" href={`/reservar/${identity.businessSlug}`} target="_blank" rel="noreferrer"><Sparkles size={16} /> Ver página pública</a>
-          <button className="icon-button" aria-label="Notificaciones"><Bell size={19} /></button>
+          <a className="public-link" href={`/reservar/${identity.businessSlug}`} target="_blank" rel="noreferrer"><Sparkles size={16} /> Página de reservas</a>
+          <AlertsBell />
           <div className="account-menu">
             <button className="user-avatar" aria-label="Abrir menú de cuenta" aria-expanded={accountOpen} onClick={() => setAccountOpen((value) => !value)}>{initials(identity.displayName)}</button>
             {accountOpen && <div className="account-popover"><strong>{identity.displayName}</strong><small>{identity.email}</small><small>{roleLabel(identity.role)} · {identity.businessName}</small><form action="/api/auth/logout" method="post"><button><LogOut size={15}/> Cerrar sesión</button></form></div>}
@@ -272,7 +281,7 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
           <div className="page-heading"><div><p className="eyebrow">{identity.businessName}</p><h1>{title}</h1><p>{displaySubtitle}</p></div><div className="heading-actions"><button className="secondary" onClick={copyLink}><Copy size={16} /> Link de reservas</button>{canWriteAppointments&&<button className="primary" onClick={() => setModalOpen(true)} disabled={!catalog}><Plus size={17} /> Nueva cita</button>}</div></div>
           {loading && <div className="loading-line" />}
           {loadError && <p className="form-error" role="alert">{loadError}</p>}
-          {active === "dashboard" ? <Dashboard appointments={appointments} timezone={identity.timezone} /> : <ModuleView section={active} appointments={appointments} recurringSeries={recurringSeries} catalog={catalog} identity={identity} canWrite={canWriteAppointments} onServicesChanged={(services)=>setCatalog((current)=>current?{...current,services}:current)} onProfessionalsChanged={(professionals,changed)=>{setCatalog((current)=>current?{...current,professionals}:current);if(changed)setAppointments((items)=>items.map((item)=>item.professionalId===changed.id?{...item,professionalName:changed.name}:item))}} onClientUpdated={(client)=>setAppointments((items)=>items.map((item)=>item.clientId===client.id?{...item,clientName:client.name,email:client.email,phone:client.phone}:item))} onPaymentChanged={(appointmentId,paidCents)=>setAppointments((items)=>items.map((item)=>item.id===appointmentId?{...item,paidCents,paymentStatus:paymentStatusFor(item.totalCents,paidCents)}:item))} onNew={() => setModalOpen(true)} onNewRecurring={()=>setRecurringModalOpen(true)} onEditSeries={setEditingSeries} onCancelSeries={async(series)=>{
+          {active === "dashboard" ? <Dashboard appointments={appointments} timezone={identity.timezone} slug={identity.businessSlug} /> : <ModuleView section={active} appointments={appointments} recurringSeries={recurringSeries} catalog={catalog} identity={identity} canWrite={canWriteAppointments} onServicesChanged={(services)=>setCatalog((current)=>current?{...current,services}:current)} onProfessionalsChanged={(professionals,changed)=>{setCatalog((current)=>current?{...current,professionals}:current);if(changed)setAppointments((items)=>items.map((item)=>item.professionalId===changed.id?{...item,professionalName:changed.name}:item))}} onClientUpdated={(client)=>setAppointments((items)=>items.map((item)=>item.clientId===client.id?{...item,clientName:client.name,email:client.email,phone:client.phone}:item))} onPaymentChanged={(appointmentId,paidCents,totalCents)=>setAppointments((items)=>items.map((item)=>item.id===appointmentId?{...item,paidCents,totalCents:totalCents??item.totalCents,paymentStatus:paymentStatusFor(totalCents??item.totalCents,paidCents)}:item))} onNew={() => setModalOpen(true)} onNewRecurring={()=>setRecurringModalOpen(true)} onEditSeries={setEditingSeries} onCancelSeries={async(series)=>{
             const answer=window.prompt(`Motivo para cancelar las citas futuras de ${series.clientName}:`,"");if(answer===null)return;
             const reason=answer.trim();if(!reason){setNotice("El motivo de cancelación es obligatorio");return}
             const response=await fetch("/api/admin/recurring-appointments",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:series.id,reason})});
@@ -302,40 +311,106 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
   );
 }
 
-function Dashboard({ appointments, timezone }: { appointments: Appointment[]; timezone: string }) {
+function Dashboard({ appointments, timezone, slug }: { appointments: Appointment[]; timezone: string; slug: string }) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const todayAppointments = appointments.filter((appointment) => appointment.date === today);
+  const pendingToday = todayAppointments.filter((item) => !["completada", "cancelada", "no_asistio"].includes(item.status));
   const todayRevenue = todayAppointments.reduce((sum, appointment) => sum + appointment.paidCents, 0);
-  const clientCount = new Set(appointments.map((appointment) => appointment.email ?? appointment.phone)).size;
-  const days = Array.from({ length: 7 }, (_, index) => {
+  const [week, setWeek] = useState<{ days: string[]; revenue: number[]; gross: number } | null>(null);
+  useEffect(() => {
+    const to = today;
+    const fromDate = new Date(`${today}T12:00:00Z`);
+    fromDate.setUTCDate(fromDate.getUTCDate() - 6);
+    const from = fromDate.toISOString().slice(0, 10);
+    fetch(`/api/admin/reports?from=${from}&to=${to}`, { credentials: "same-origin" }).then(async (response) => {
+      const body = await readJsonObject(response);
+      if (!response.ok || !isJsonObject(body) || !Array.isArray(body.daily)) return;
+      const days = Array.from({ length: 7 }, (_, index) => {
+        const value = new Date(`${from}T12:00:00Z`);
+        value.setUTCDate(value.getUTCDate() + index);
+        return value.toISOString().slice(0, 10);
+      });
+      const byDay = new Map((body.daily as Record<string, unknown>[]).map((row) => [String(row.day), Number(row.serviceCents || 0) + Number(row.productCents || 0)]));
+      const revenue = days.map((day) => byDay.get(day) ?? 0);
+      const summary = isJsonObject(body.summary) ? body.summary : {};
+      setWeek({ days, revenue, gross: Number(summary.grossRevenueCents || revenue.reduce((sum, value) => sum + value, 0)) });
+    }).catch(() => undefined);
+  }, [today]);
+  const days = week?.days ?? Array.from({ length: 7 }, (_, index) => {
     const value = new Date(); value.setDate(value.getDate() - (6 - index));
     return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(value);
   });
-  const revenue = days.map((date) => appointments.filter((item) => item.date === date).reduce((sum, item) => sum + item.paidCents, 0));
+  const revenue = week?.revenue ?? days.map((date) => appointments.filter((item) => item.date === date).reduce((sum, item) => sum + item.paidCents, 0));
   const revenueMax = Math.max(...revenue, 1);
   const popular = Array.from(appointments.reduce((map, item) => map.set(item.serviceName, (map.get(item.serviceName) ?? 0) + 1), new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 3);
   const future = appointments.filter((item) => item.date >= today && !["cancelada", "no_asistio"].includes(item.status)).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
+  const ticket = todayAppointments.filter((item) => item.paidCents > 0).length;
   return <>
+    <div className="pole-line" aria-hidden="true" />
+    <div className="shop-strip">
+      <div><span>Piso abierto</span><h2>Hoy se atiende, se cobra y se cuadra.</h2></div>
+      <div className="shop-actions">
+        <Link className="primary" href="/turno">Turno del día</Link>
+        <Link className="secondary" href="/caja">Caja</Link>
+        <Link className="secondary" href="/reportes">Analítica</Link>
+        <a className="secondary" href={`/reservar/${slug}`} target="_blank" rel="noreferrer">Reservas</a>
+      </div>
+    </div>
     <section className="metric-grid">
-      <Metric icon={<CalendarDays />} tone="terracotta" label="Citas de hoy" value={String(todayAppointments.length)} trend="Datos reales de agenda" />
-      <Metric icon={<CircleDollarSign />} tone="olive" label="Cobrado hoy" value={`$${(todayRevenue / 100).toFixed(2)}`} trend="Pagos registrados" />
-      <Metric icon={<UsersRound />} tone="ink" label="Clientes en agenda" value={String(clientCount)} trend="Sin registros ficticios" />
-      <Metric icon={<Clock3 />} tone="sand" label="Por atender" value={String(todayAppointments.filter((item) => !["completada", "cancelada", "no_asistio"].includes(item.status)).length)} trend="Pendientes de hoy" />
+      <Metric icon={<CalendarDays />} tone="terracotta" label="Citas de hoy" value={String(todayAppointments.length)} trend={`${pendingToday.length} por atender`} />
+      <Metric icon={<CircleDollarSign />} tone="olive" label="Cobrado hoy" value={`$${(todayRevenue / 100).toFixed(2)}`} trend={ticket ? `Ticket medio $${(todayRevenue / Math.max(1, ticket) / 100).toFixed(2)}` : "Aún sin cobros"} />
+      <Metric icon={<UsersRound />} tone="ink" label="En silla / cola" value={String(pendingToday.length)} trend="Estados reales de la agenda" />
+      <Metric icon={<Clock3 />} tone="sand" label="Próximas" value={String(future.length)} trend="Sin canceladas ni no-show" />
     </section>
     <section className="dashboard-grid">
-      <div className="panel revenue-panel"><PanelTitle title="Ingresos completados" subtitle="Últimos 7 días" /><div className="big-number">${(revenue.reduce((sum, value) => sum + value, 0) / 100).toFixed(2)} <span><TrendingUp size={15} /> Datos reales</span></div><div className="chart">
+      <div className="panel revenue-panel"><PanelTitle title="Ingresos de la semana" subtitle="Pagos y POS persistidos" /><div className="big-number">${((week?.gross ?? revenue.reduce((sum, value) => sum + value, 0)) / 100).toFixed(2)} <span><TrendingUp size={15} /> Últimos 7 días</span></div><div className="chart">
         {revenue.map((value, index) => <div className="bar-wrap" key={days[index]} title={`$${(value / 100).toFixed(2)}`}><div className={`bar ${index === 6 ? "hot" : ""}`} style={{height:`${Math.max(5, (value / revenueMax) * 100)}%`}} /><span>{new Intl.DateTimeFormat("es-VE", { weekday: "narrow", timeZone: "UTC" }).format(new Date(`${days[index]}T12:00:00Z`))}</span></div>)}
       </div></div>
-      <div className="panel"><PanelTitle title="Próximas citas" subtitle={`${future.length} por atender`} />
-        <div className="appointment-list">{future.length ? future.slice(0,4).map((a)=><AppointmentRow key={a.id} appointment={a} />) : <EmptyState text="Tu agenda está libre." />}</div>
+      <div className="panel"><PanelTitle title="En la silla ahora" subtitle={`${future.length} por atender`} />
+        <div className="appointment-list">{future.length ? future.slice(0,5).map((a)=><AppointmentRow key={a.id} appointment={a} />) : <EmptyState text="La agenda de hoy está libre." />}</div>
       </div>
     </section>
-    <section className="lower-grid"><div className="panel"><PanelTitle title="Servicios más pedidos" subtitle="Según tu agenda" />
+    <section className="lower-grid"><div className="panel"><PanelTitle title="Servicios que más piden" subtitle="Según la agenda real" />
       {popular.length ? popular.map(([name, count]) => <div className="service-progress" key={name}><div><strong>{name}</strong><span>{count} {count === 1 ? "cita" : "citas"}</span></div><div><i style={{width:`${Math.max(12, (count / (popular[0]?.[1] ?? 1)) * 100)}%`}} /></div></div>) : <EmptyState text="Aún no hay servicios reservados." />}
-    </div><div className="panel"><PanelTitle title="Actividad reciente" subtitle="Últimos movimientos" />
-      {appointments.length ? appointments.slice().sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)).slice(0,3).map((item) => <div className="activity" key={item.id}><span className={`activity-icon ${item.source === "online" ? "ok" : "neutral"}`}>{item.source === "online" ? <Sparkles /> : <UserRound />}</span><div><strong>{item.source === "online" ? "Reserva online" : "Cita creada desde el panel"}</strong><p>{item.clientName} · {item.serviceName}</p></div><time>{formatShortDate(item.date)}</time></div>) : <EmptyState text="Todavía no hay actividad." />}
+    </div><div className="panel"><PanelTitle title="Movimiento reciente" subtitle="Panel y reservas online" />
+      {appointments.length ? appointments.slice().sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)).slice(0,4).map((item) => <div className="activity" key={item.id}><span className={`activity-icon ${item.source === "online" ? "ok" : "neutral"}`}>{item.source === "online" ? <Sparkles /> : <UserRound />}</span><div><strong>{item.source === "online" ? "Reserva online" : "Cita desde el panel"}</strong><p>{item.clientName} · {item.serviceName}</p></div><time>{formatShortDate(item.date)}</time></div>) : <EmptyState text="Todavía no hay actividad." />}
     </div></section>
   </>;
+}
+
+function AlertsBell() {
+  const [open, setOpen] = useState(false);
+  const [alerts, setAlerts] = useState<{ id:string; title:string; message:string; severity:string; readAt:string|null }[]>([]);
+  const unread = alerts.filter((item) => !item.readAt).length;
+  const load = () => {
+    fetch("/api/admin/alerts", { credentials: "same-origin" }).then(async (response) => {
+      const body = await readJsonObject(response);
+      if (!response.ok || !Array.isArray(body.alerts)) return;
+      setAlerts(body.alerts.filter(isJsonObject).map((item) => ({
+        id: String(item.id ?? ""), title: String(item.title ?? ""), message: String(item.message ?? ""),
+        severity: String(item.severity ?? "info"), readAt: typeof item.readAt === "string" ? item.readAt : null,
+      })).filter((item) => item.id));
+    }).catch(() => undefined);
+  };
+  useEffect(() => { load(); const timer = window.setInterval(load, 60_000); return () => window.clearInterval(timer); }, []);
+  const markRead = async (id: string) => {
+    await fetch("/api/admin/alerts", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) });
+    setAlerts((items) => items.map((item) => item.id === id ? { ...item, readAt: new Date().toISOString() } : item));
+  };
+  return <div className="notify-wrap">
+    <button className="icon-button" aria-label={unread ? `${unread} notificaciones sin leer` : "Notificaciones"} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+      <Bell size={19} />
+      {unread > 0 && <em className="alert-badge">{unread > 9 ? "9+" : unread}</em>}
+    </button>
+    {open && <div className="alerts-popover" role="dialog" aria-label="Alertas del negocio">
+      <h2>Alertas del piso</h2>
+      {alerts.length ? alerts.slice(0, 8).map((alert) => <div className="alert-row" key={alert.id}>
+        <strong>{alert.title}</strong>
+        <span>{alert.message}</span>
+        {!alert.readAt && <button type="button" onClick={() => void markRead(alert.id)}>Marcar leída</button>}
+      </div>) : <p>Sin alertas por ahora. Los recordatorios y avisos de plan aparecen aquí.</p>}
+    </div>}
+  </div>;
 }
 
 function Metric({ icon, tone, label, value, trend }: { icon: React.ReactNode; tone: string; label: string; value: string; trend: string }) {
@@ -358,7 +433,8 @@ function AppointmentRow({ appointment: a }: { appointment: Appointment }) {
   return <div className="appointment-row"><time>{a.time}</time><div className="person-initial">{a.clientName.split(" ").map((n)=>n[0]).slice(0,2).join("")}</div><div><strong>{a.clientName}</strong><p>{a.serviceName} · {a.professionalName}</p></div><span className={`status ${a.status}`}>{a.status}</span><button className="ghost-icon" aria-label="Más opciones"><MoreHorizontal size={18}/></button></div>;
 }
 
-function ModuleView({ section, appointments, recurringSeries, catalog, identity, canWrite, onServicesChanged, onProfessionalsChanged, onClientUpdated, onPaymentChanged, onNew, onNewRecurring, onEditSeries, onCancelSeries, onEdit, onReschedule, onStatus }: { section: string; appointments: Appointment[]; recurringSeries:RecurringSeries[]; catalog: Catalog|null; identity:AdminIdentity; canWrite:boolean; onServicesChanged:(services:Service[])=>void; onProfessionalsChanged:(professionals:Professional[],changed?:Professional)=>void; onClientUpdated:(client:ClientRecord)=>void; onPaymentChanged:(appointmentId:string,paidCents:number)=>void; onNew: () => void; onNewRecurring:()=>void; onEditSeries:(series:RecurringSeries)=>void; onCancelSeries:(series:RecurringSeries)=>Promise<void>; onEdit:(appointment:Appointment)=>void; onReschedule:(appointment:Appointment,date:string,time:string)=>Promise<void>; onStatus:(id:string,status:string)=>Promise<void> }) {
+function ModuleView({ section, appointments, recurringSeries, catalog, identity, canWrite, onServicesChanged, onProfessionalsChanged, onClientUpdated, onPaymentChanged, onNew, onNewRecurring, onEditSeries, onCancelSeries, onEdit, onReschedule, onStatus }: { section: string; appointments: Appointment[]; recurringSeries:RecurringSeries[]; catalog: Catalog|null; identity:AdminIdentity; canWrite:boolean; onServicesChanged:(services:Service[])=>void; onProfessionalsChanged:(professionals:Professional[],changed?:Professional)=>void; onClientUpdated:(client:ClientRecord)=>void; onPaymentChanged:(appointmentId:string,paidCents:number,totalCents?:number)=>void; onNew: () => void; onNewRecurring:()=>void; onEditSeries:(series:RecurringSeries)=>void; onCancelSeries:(series:RecurringSeries)=>Promise<void>; onEdit:(appointment:Appointment)=>void; onReschedule:(appointment:Appointment,date:string,time:string)=>Promise<void>; onStatus:(id:string,status:string)=>Promise<void> }) {
+  if (section === "turno" || section === "turno-del-dia") return <DayShift catalog={catalog} timezone={identity.timezone} canWrite={canWrite} canSell={["owner", "admin"].includes(identity.role)} />;
   if (section === "agenda") return <Agenda appointments={appointments} professionals={catalog?.professionals??[]} timezone={identity.timezone} canWrite={canWrite} onEdit={onEdit} onReschedule={onReschedule} />;
   if (section === "citas") return <Appointments appointments={appointments} recurringSeries={recurringSeries} canWrite={canWrite} onNew={onNew} onNewRecurring={onNewRecurring} onEditSeries={onEditSeries} onCancelSeries={onCancelSeries} onEdit={onEdit} onStatus={onStatus} />;
   if (section === "clientes") return <Clients onClientUpdated={onClientUpdated} />;
@@ -366,7 +442,10 @@ function ModuleView({ section, appointments, recurringSeries, catalog, identity,
   if (section === "servicios") return <Services initialServices={catalog?.services??[]} onCatalogChanged={onServicesChanged} />;
   if (section === "equipo") return <Team initialProfessionals={catalog?.professionals??[]} services={catalog?.services??[]} onCatalogChanged={onProfessionalsChanged} />;
   if (section === "horarios") return <Schedules professionals={catalog?.professionals??[]} timezone={identity.timezone} />;
-  if (section === "reportes") return <Reports appointments={appointments} />;
+  if (section === "estaciones") return <ResourcesManager services={catalog?.services??[]} professionals={catalog?.professionals??[]} />;
+  if (section === "reportes") return <ReportsManager />;
+  if (section === "comisiones") return <CommissionsManager />;
+  if (section === "configuracion") return <SettingsPanel />;
   if (["marketing","promociones","fidelizacion","resenas","galeria","espera","pagos"].includes(section)) return <GrowthManager section={section} />;
   return <FeatureSection section={section} />;
 }
@@ -757,8 +836,6 @@ function Schedules({professionals,timezone}:{professionals:Professional[];timezo
   </div>
 }
 
-function Reports({appointments}:{appointments:Appointment[]}){const completed=appointments.filter((item)=>item.status==="completada");const total=appointments.reduce((sum,item)=>sum+item.paidCents,0);const unique=new Set(appointments.map((item)=>item.email??item.phone)).size;const byService=Array.from(appointments.reduce((map,item)=>map.set(item.serviceName,(map.get(item.serviceName)??0)+item.paidCents),new Map<string,number>()).entries()).sort((a,b)=>b[1]-a[1]);return <><section className="metric-grid three"><Metric icon={<CircleDollarSign/>} tone="olive" label="Cobros registrados" value={`$${(total/100).toFixed(2)}`} trend="Pagos persistentes"/><Metric icon={<CalendarDays/>} tone="terracotta" label="Citas completadas" value={String(completed.length)} trend={`${appointments.length} citas totales`}/><Metric icon={<UsersRound/>} tone="ink" label="Clientes únicos" value={String(unique)} trend="Según la agenda"/></section><div className="dashboard-grid"><div className="panel revenue-panel"><PanelTitle title="Distribución por servicio" subtitle="Cobros por servicio"/><div className="chart tall-chart">{byService.length?byService.map(([name,value],index)=><div className="bar-wrap" key={name} title={name}><div className={`bar ${index===0?"hot":""}`} style={{height:`${Math.max(8,value/Math.max(1,byService[0][1])*100)}%`}}/><span>{name.slice(0,1)}</span></div>):<EmptyState text="Registra cobros para ver el reporte."/>}</div></div><div className="panel"><PanelTitle title="Rendimiento" subtitle="Estados de la agenda"/>{["programada","confirmada","en_progreso","completada","cancelada","no_asistio"].map((state)=><div className="service-progress" key={state}><div><strong>{statusLabel(state)}</strong><span>{appointments.filter((item)=>item.status===state).length}</span></div><div><i style={{width:`${appointments.length?appointments.filter((item)=>item.status===state).length/appointments.length*100:0}%`}}/></div></div>)}</div></div></>}
-
 function FeatureSection({section}:{section:string}){
   if (section === "usuarios") return <MembersPanel/>;
   if (section === "seguridad") return <><SecurityCenter/><BackupLink/></>;
@@ -824,16 +901,16 @@ function RecurringSeriesModal({series,catalog,onClose,onSaved}:{series:Recurring
 
 function AppointmentEditModal({appointment,catalog,onClose,onSave}:{appointment:Appointment;catalog:Catalog;onClose:()=>void;onSave:(appointment:Appointment,changes:AppointmentChanges)=>Promise<Appointment>}){
   const today=dateInTimeZone(catalog.business.timezone);const [saving,setSaving]=useState(false);const [error,setError]=useState("");
-  const [serviceId,setServiceId]=useState(appointment.serviceId);const [professionalId,setProfessionalId]=useState(appointment.professionalId);const [date,setDate]=useState(appointment.date);const [time,setTime]=useState(appointment.time);const [times,setTimes]=useState<string[]>([appointment.time]);const [loadingTimes,setLoadingTimes]=useState(true);
+  const [serviceId,setServiceId]=useState(appointment.serviceId);const [professionalId,setProfessionalId]=useState(appointment.professionalId);const resourceId=appointment.resourceId??"";const [date,setDate]=useState(appointment.date);const [time,setTime]=useState(appointment.time);const [times,setTimes]=useState<string[]>([appointment.time]);const [loadingTimes,setLoadingTimes]=useState(true);
   const eligibleProfessionals=professionalsForService(catalog,serviceId);const currentProfessional=catalog.professionals.find((item)=>item.id===appointment.professionalId);const professionalOptions=serviceId===appointment.serviceId&&currentProfessional&&!eligibleProfessionals.some((item)=>item.id===currentProfessional.id)?[currentProfessional,...eligibleProfessionals]:eligibleProfessionals;
   useEffect(()=>{
     if(!serviceId||!professionalId||!date)return;
     const controller=new AbortController();
-    const query=new URLSearchParams({serviceId,professionalId,date,appointmentId:appointment.id});
+    const query=new URLSearchParams({serviceId,professionalId,date,appointmentId:appointment.id});if(resourceId)query.set("resourceId",resourceId);
     fetch(`/api/admin/availability?${query}`,{credentials:"same-origin",signal:controller.signal}).then(async(response)=>{const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos consultar la agenda"));const available=stringArray(data.times);setTimes(available);setTime((current)=>available.includes(current)?current:(available[0]??""))}).catch((reason)=>{if(reason instanceof DOMException&&reason.name==="AbortError")return;setTimes([]);setTime("");setError(reason instanceof Error?reason.message:"No pudimos consultar la agenda")}).finally(()=>{if(!controller.signal.aborted)setLoadingTimes(false)});
     return()=>controller.abort();
-  },[appointment.id,date,professionalId,serviceId]);
-  const submit=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();if(!time)return;setSaving(true);setError("");const payload=Object.fromEntries(new FormData(event.currentTarget).entries());try{await onSave(appointment,{clientName:String(payload.name),phone:String(payload.phone),email:String(payload.email),notes:String(payload.notes??""),serviceId,professionalId,date,time});onClose()}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos actualizar la cita");setSaving(false)}};
+  },[appointment.id,date,professionalId,resourceId,serviceId]);
+  const submit=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();if(!time)return;setSaving(true);setError("");const payload=Object.fromEntries(new FormData(event.currentTarget).entries());try{await onSave(appointment,{clientName:String(payload.name),phone:String(payload.phone),email:String(payload.email),notes:String(payload.notes??""),serviceId,professionalId,date,time,resourceId:resourceId||null});onClose()}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos actualizar la cita");setSaving(false)}};
   const refreshTimes=()=>{setLoadingTimes(true);setError("")};
   return <div className="modal-backdrop" onMouseDown={(event)=>{if(event.target===event.currentTarget)onClose()}}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="edit-appointment-title"><div className="modal-head"><div><span className="eyebrow">{appointment.recurringSeriesId?"Cita recurrente · edición individual":"Edición protegida"}</span><h2 id="edit-appointment-title">Editar cita</h2></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></div><form onSubmit={submit}><div className="form-grid"><label className="wide">Nombre del cliente<input name="name" required maxLength={100} autoComplete="name" defaultValue={appointment.clientName}/></label><label>Teléfono<input name="phone" required maxLength={25} autoComplete="tel" defaultValue={appointment.phone}/></label><label>Email<input name="email" type="email" required maxLength={254} autoComplete="email" defaultValue={appointment.email}/></label><label>Servicio<select value={serviceId} onChange={(event)=>{const nextService=event.target.value;const nextProfessionals=professionalsForService(catalog,nextService);refreshTimes();setServiceId(nextService);setProfessionalId(nextProfessionals[0]?.id??"")}}>{catalog.services.map((item)=><option value={item.id} key={item.id}>{item.name} · ${(item.priceCents/100).toFixed(2)}</option>)}</select></label><label>Profesional<select value={professionalId} onChange={(event)=>{refreshTimes();setProfessionalId(event.target.value)}}>{professionalOptions.map((item)=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>Fecha<input type="date" min={today} value={date} onChange={(event)=>{refreshTimes();setDate(event.target.value)}} required/></label><label>Hora<select value={time} onChange={(event)=>setTime(event.target.value)} required disabled={loadingTimes||!times.length}><option value="">{loadingTimes?"Consultando...":"Selecciona"}</option>{times.map((value)=><option value={value} key={value}>{value}</option>)}</select></label><label className="wide">Notas<textarea name="notes" maxLength={500} defaultValue={appointment.notes} placeholder="Preferencias, observaciones..."/></label></div>{appointment.recurringSeriesId&&<p className="recurring-form-note"><CalendarDays size={15}/>Este cambio afecta solo esta cita. Usa “Series recurrentes” para cambiar las futuras.</p>}{!loadingTimes&&!times.length&&<p className="availability-note">No quedan horarios disponibles para esta fecha.</p>}{error&&<p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Volver</button><button className="primary" disabled={saving||loadingTimes||!time}>{saving?"Guardando...":"Guardar cambios"}</button></div></form></div></div>;
 }

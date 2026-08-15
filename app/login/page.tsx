@@ -22,9 +22,9 @@ export default async function LoginPage() {
         </div>
 
         <div className="login-message">
-          <span className="login-kicker"><Sparkles /> Gestión inteligente para barberías</span>
-          <h1>Tu negocio.<br /><em>Más claro cada día.</em></h1>
-          <p>Organiza reservas, clientes y equipo desde un espacio diseñado para trabajar rápido y decidir mejor.</p>
+          <span className="login-kicker"><Sparkles /> Software para barberías de verdad</span>
+          <h1>Negro en el piso.<br /><em>Oro en la caja.</em></h1>
+          <p>Agenda, sillas, cobros y arqueo en un panel hecho para el ritmo de una barbería: rápido, claro y sin plantillas genéricas.</p>
           <ul>
             <li><Check /> Agenda y reservas en tiempo real</li>
             <li><Check /> Información aislada por negocio</li>
@@ -50,9 +50,9 @@ export default async function LoginPage() {
               </div>
               <div className="preview-schedule">
                 <header><b>Próximas citas</b><span>Hoy</span></header>
-                <div><time>10:30</time><i className="blue"/><p><b>Corte + Barba</b><small>55 min</small></p></div>
-                <div><time>12:00</time><i className="cyan"/><p><b>Corte Signature</b><small>35 min</small></p></div>
-                <div><time>15:30</time><i className="violet"/><p><b>Barba Ritual</b><small>25 min</small></p></div>
+                <div><time>10:30</time><i className="gold"/><p><b>Corte + Barba</b><small>55 min</small></p></div>
+                <div><time>12:00</time><i className="gold"/><p><b>Corte Signature</b><small>35 min</small></p></div>
+                <div><time>15:30</time><i className="gold"/><p><b>Barba Ritual</b><small>25 min</small></p></div>
               </div>
             </div>
           </div>

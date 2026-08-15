@@ -1229,46 +1229,32 @@ La agenda administrativa ofrece vistas diaria, semanal y mensual basadas únicam
 
 La tarjeta social beige de la primera versión fue reemplazada por una variante en grafito, azul, cian, violeta y blanco.
 
-## 11. Nueva dirección visual
+## 11. Dirección visual — barbería en negro y oro
 
 Feedback explícito del usuario:
 
-> No le gusta el beige.
+> No le gusta el beige. El panel no tenía negro y no se sentía como una barbería.
 
-Nueva base visual:
+Identidad visual de producción:
 
-- Fondo general: gris muy claro o blanco frío.
-- Tarjetas: blanco puro.
-- Navegación: grafito o azul noche.
-- Texto: grafito profundo.
-- Primario: azul eléctrico.
-- Secundario: cian.
-- Acento complementario: violeta.
-- Estados positivos: verde frío.
-- Bordes: gris azulado.
+- Negro verdadero en sidebar, topbar, login y reserva pública (`#000000` / `#050505`).
+- Oro de barbería como acción primaria (`#C6A15B`).
+- Acento de poste de barbero en rojo (`#C41E3A`) para la marca y alertas.
+- Superficies operativas blancas o hueso frío para leer números, caja y reportes.
+- Tipografía de titular: Playfair Display. Cuerpo: Geist.
+- Evitar beige, terracota, azul eléctrico de plantilla y fondos crema.
 
-Paleta propuesta:
+Paleta:
 
 | Uso | Color |
 |---|---|
-| Fondo | `#F5F7FA` |
+| Vacío / sidebar | `#000000` |
+| Fondo de trabajo | `#F3F3F4` |
 | Superficie | `#FFFFFF` |
-| Texto | `#111827` |
-| Texto secundario | `#64748B` |
-| Borde | `#E2E8F0` |
-| Sidebar | `#0B1220` |
-| Primario | `#2563EB` |
-| Primario oscuro | `#1D4ED8` |
-| Secundario | `#06B6D4` |
-| Acento | `#8B5CF6` |
-
-Evitar:
-
-- Beige.
-- Terracota.
-- Marrón.
-- Crema.
-- Texturas de papel cálidas.
+| Texto | `#0A0A0A` |
+| Primario | `#C6A15B` |
+| Poste | `#C41E3A` |
+| Positivo | `#1F7A4D` |
 
 ## 12. Plan recomendado por fases
 
@@ -1373,3 +1359,153 @@ El sistema no debe considerarse listo para producción comercial hasta que:
 - [x] Los datos estén aislados por negocio.
 - [ ] Existan auditoría, rate limiting y pruebas end-to-end.
 - [x] La reserva pública sea accesible para clientes y el panel permanezca protegido.
+
+## 17. Auditoría integral adicional — 7 de agosto de 2026
+
+Esta sección actualiza el checklist anterior con evidencia del repositorio actual y de una revisión navegable de la aplicación desplegada. No contiene credenciales.
+
+### 17.1 Alcance y evidencia
+
+- Se inició sesión en `https://app.nexorabarber.com/auth` con la cuenta proporcionada y se recorrieron las rutas visibles del panel: Dashboard, Turno del Día, Agenda, Citas, Clientes, Caja, Servicios, Profesionales, Horarios, Recursos, Reportes, Reporte de ingresos, Comisiones, Integraciones, Promociones, Fidelización, Galería, Reseñas, Usuarios y roles, Configuración, Link de reservas, Lista de espera y Soporte.
+- Se abrieron los formularios y pestañas no destructivos de citas, citas recurrentes, bloqueos, clientes, importación, servicios, profesionales, horarios, recursos, caja, POS, inventario, promociones, tarjetas de regalo, fidelización, galería, reseñas, integraciones, configuración, métodos de pago, cancelación y link público.
+- La cuenta auditada estaba vacía de operación: 0 citas, 0 clientes, 0 ventas y 0 cobros. No se crearon citas, clientes, cobros, productos ni archivos.
+- Durante la inspección se activó accidentalmente el programa de fidelización al pulsar un control que era una acción inmediata; se desactivó y se guardó el estado original. No quedó ese cambio en la cuenta.
+- En el repositorio local, `npm test` terminó con 29 pruebas aprobadas, `npm run lint` terminó sin errores y `npm run build` terminó correctamente.
+
+### 17.2 Estado confirmado del repositorio local
+
+Implementado y persistente en D1:
+
+- Autenticación propia, registro de negocio, sesiones, cambio obligatorio de contraseña temporal, recuperación por token, roles base y aislamiento por negocio.
+- Citas desde panel y reserva pública, disponibilidad por horario, bloqueos, solapamientos atómicos, edición, reprogramación, estados, motivos de cancelación, auditoría y series recurrentes semanal/quincenal/mensual.
+- Clientes con CRUD, historial, importación CSV real, exportación CSV real y protección de eliminación.
+- Servicios con CRUD, categorías como texto, activación, duración, precio y relación muchos-a-muchos con profesionales.
+- Profesionales con CRUD, servicios asignados, métricas, horarios iniciales, activación y protección de eliminación.
+- Caja con apertura, cobros parciales, métodos de pago, propinas, anulaciones, cierre y arqueo.
+- POS, productos, SKU, inventario, ajustes de stock, gastos, reembolsos y recibos HTML imprimibles.
+- Promociones básicas, puntos de fidelización manuales, reseñas manuales con moderación, galería basada en URLs HTTPS, lista de espera básica, cola de mensajes y solicitudes de depósito manuales.
+- Registro manual de planes y suscripciones, límite de miembros por plan, copias JSON por negocio, rate limiting, cabeceras de seguridad, auditoría y observabilidad configurada en Wrangler.
+
+### 17.3 Pendientes confirmados para implementar
+
+Ordenados por impacto y dependencia:
+
+#### P0 — cerrar módulos operativos que hoy son incompletos
+
+- [x] Configuración persistente del negocio: datos comerciales, país, zona horaria, formato horario, moneda, métodos de pago, política de cancelación, WhatsApp, imágenes y preferencias. Existe `/api/admin/settings` protegido por `settings.write`, con persistencia 1:1 en `business_settings`; las imágenes se guardan como URLs HTTPS hasta implementar almacenamiento gestionado.
+- [x] Estaciones y recursos: crear, editar, activar/desactivar y eliminar recursos; relacionarlos con servicios o profesionales; bloquear solapamientos por recurso. Existe `/api/admin/resources`, la vista `/estaciones`, auditoría, aislamiento por negocio y trigger `resource_time_overlap` para citas con recurso.
+- [x] Turno del día: walk-ins, llegada, cola, estados esperando/en atención/finalizado, reordenamiento, tiempo de espera, conversión a cita/venta y preparación idempotente de recordatorios de mañana. El envío externo queda pendiente en mensajería P1.
+- [x] Reportes reales de negocio: filtros por periodo, profesional, servicio y método de pago; ingresos, productos, gastos, ganancia neta, propinas y datos derivados directamente de pagos, POS, gastos, reembolsos y comisiones. Existe `/api/admin/reports`, exportación CSV y el módulo `/reportes`.
+- [x] Comisiones: esquema, reglas porcentuales/fijas, prioridad por profesional/servicio/categoría, generación al completar y cobrar, estados pendiente/pagada, lotes, historial y auditoría.
+
+#### P1 — completar crecimiento y experiencia pública
+
+- [ ] Mensajería real: proveedor de WhatsApp, proveedor de email, plantillas, consentimiento, opt-in/opt-out, reintentos, entregas/errores y cron o cola Worker que procese `message_logs`. Hoy solo se encolan mensajes; no hay envío externo ni handler `scheduled`.
+- [ ] Recordatorios y seguimiento automáticos: ejecución programada, confirmaciones al reservar, seguimiento post-cita, enlaces de reprogramación/cancelación y trazabilidad por mensaje.
+- [ ] Galería e imágenes gestionadas: subida segura, R2 o almacenamiento equivalente, compresión, validación de tamaño/tipo, eliminación y metadatos para servicios/profesionales. Hoy la galería solo guarda una URL HTTPS escrita manualmente.
+- [ ] Personalización real del link de reservas: logo, portada, datos comerciales, estilos, bloques visibles, horarios, anticipación, días máximos, precios/duración, políticas y persistencia por negocio. El booking local solo usa slug, catálogo, profesionales, horarios y disponibilidad persistentes.
+- [ ] Portal del cliente: consultar, confirmar, reprogramar y cancelar usando un token seguro, con política y límites aplicados. Actualmente no hay flujo público de gestión de citas.
+- [ ] Depósitos y pagos online conectados: Stripe/Mercado Pago/PayPal o proveedor elegido, webhooks, conciliación, expiración, reembolso y aplicación del depósito al pago/caja/cita. Hoy la solicitud genera un enlace y recibe una referencia manual, pero confirmar el depósito no crea un `payment` ni concilia caja.
+- [ ] Promociones completas: aplicar códigos a la reserva/POS, límites por cliente, servicios elegibles, primera visita/inactividad, tarjetas de regalo, métricas y auditoría de uso. El CRUD básico ya existe, pero no se aplica al checkout.
+- [ ] Fidelización completa: regla automática al cobrar, recompensas/canje, vencimiento, ajustes con historial visible y conexión con pagos. Hoy solo existe ajuste manual de puntos.
+- [ ] Lista de espera automática: preferencias de fecha/hora/servicio/profesional, detección de huecos liberados, prioridad, reserva temporal, vencimiento de aceptación y siguiente candidato.
+- [ ] Reseñas completas: vincular a cita/cliente, solicitud por email/WhatsApp, enlace de Google Business, consentimiento y publicación configurable. El CRUD manual y la publicación básica ya existen.
+
+#### P1 — seguridad, SaaS y operación comercial
+
+- [ ] Autorización por módulo: separar permisos de agenda, clientes, finanzas, marketing, configuración y auditoría. Actualmente hay cuatro roles fijos, pero la página administrativa exige `appointments.read` como permiso base y no existe un editor de permisos personalizados.
+- [ ] Límites de plan completos: aplicar `max_appointments` y demás entitlements en todas las rutas; estados trialing/active/past_due/cancelled; renovación, cancelación, facturación real, webhooks y portal de suscripción. Actualmente el cambio de plan es manual y solo se aplica de forma visible al límite de miembros.
+- [ ] Alertas del panel: conectar `/api/admin/alerts` con el botón de notificaciones, contador, listado, marcar como leídas y eventos de bienvenida/plan/operación.
+- [ ] Copias de seguridad operativas: descarga ya disponible; falta programar backups automáticos, retención, restauración verificada, cifrado/almacenamiento externo y alertas de fallo.
+- [ ] Sucursales y recursos multiubicación: `locations`, configuración por sucursal, horarios, catálogo, caja, reportes y slug/URL por ubicación.
+- [ ] Alquiler de sillas: contratos, periodos, cobros, vencimientos, reportes y relación con profesionales/sucursales.
+- [ ] Observabilidad de producto: métricas de errores y latencia por endpoint, alertas accionables, trazas de mensajes/pagos y panel de salud. Wrangler tiene observabilidad, pero no existe aún una capa funcional de alertas de negocio.
+
+#### P2 — calidad y acabado de producción
+
+- [ ] Pruebas end-to-end reales para autenticación, permisos, reserva pública, CRUD, caja, POS, pagos, reportes y flujos de error; las pruebas actuales cubren renderizado, seguridad y lógica de servidor, no una sesión completa de navegador.
+- [ ] Pruebas de concurrencia y recuperación para D1/Worker en reservas, caja, inventario, reembolsos, idempotencia y procesos programados.
+- [ ] Validación visual responsive de todos los módulos y eliminación de textos de demostración, datos ficticios y problemas de codificación de caracteres visibles.
+- [ ] Accesibilidad completa: foco de modales, teclado en calendario/drag-and-drop, nombres accesibles de icon-only buttons, contraste y lectura con lector de pantalla.
+- [ ] Dominio personalizado, branding definitivo, SEO por negocio, política de privacidad/terminos versionada y consentimiento de marketing.
+
+### 17.4 Diferencias críticas entre el sistema observado y Corteza local
+
+| Área | Observado en Nexora | Estado local de Corteza | Pendiente |
+|---|---|---|---|
+| Turno del día | Walk-ins, cola y atención | `/api/admin/day` y `/turno` persistentes | Recordatorios externos P1 |
+| Recursos | Estaciones y recursos | CRUD, asociaciones y guardas de solapamiento persistentes | Exportación y asignación pública avanzada |
+| Configuración | General, negocio, pagos, cancelación, WhatsApp e imágenes | Settings persistentes con API administrativa | Almacenamiento gestionado y consumo completo en link público |
+| Reportes | Ingresos, gastos, productos, comisiones y filtros | API, panel y exportación CSV con datos reales | Portal y personalización pública |
+| Mensajes | Integraciones, plantillas y recordatorios | Cola D1 sin transportes | Implementar P1 |
+| Galería | Carga de imagen | URL HTTPS manual | Implementar almacenamiento P1 |
+| Link público | Apariencia, bloques y horarios configurables | Reserva pública fija por slug | Implementar settings P1 |
+| Portal cliente | Gestión pública de citas | No existe | Implementar P1 |
+| Pagos | Depósitos y métodos visibles | Solicitud/manual sin conciliación | Implementar P1 |
+| Planes | Upgrade por plan | Cambio manual sin proveedor | Implementar P1 |
+
+### 17.5 Corte implementado — 8 de agosto de 2026
+
+- Se añadió la migración `0016_business_settings_resources.sql` y el soporte equivalente en `db/init.ts` para instalaciones existentes.
+- La configuración ahora se carga y guarda desde el panel con validación de zona horaria, moneda, teléfonos, correo, URLs HTTPS, métodos de pago y límites de reserva/cancelación.
+- Recursos y estaciones tienen CRUD, asociaciones persistentes, activación, auditoría, protección de eliminación y guardas D1 contra solapamientos de citas del mismo recurso.
+- Los reportes leen pagos, ventas POS, gastos y reembolsos; calculan bruto, neto, propinas y filtros operativos sin datos ficticios.
+- Se ampliaron las citas para aceptar un recurso opcional y consultar disponibilidad considerando ese recurso.
+- Verificación local: `npm run lint`, `npx tsc --noEmit`, `npx drizzle-kit check`, `npm run build` y `npm test` pasan; la suite queda en 31 pruebas aprobadas.
+
+### 17.6 Siguiente orden de ejecución
+
+1. Implementar Turno del día y conectar sus estados con citas, caja y reportes.
+2. Crear el modelo de comisiones y exportación de reportes.
+3. Completar personalización del link público y portal de cliente.
+4. Integrar mensajería programada y pagos con proveedor/webhooks.
+5. Completar límites de plan, alertas, backups automáticos y permisos por módulo.
+6. Añadir E2E, accesibilidad, pruebas de concurrencia y validación visual final.
+
+### 17.7 Corte implementado — Turno del día
+
+- Se añadió la migración `0017_day_queue.sql`, la tabla `day_queue_entries`, sus índices de negocio y su inclusión en las copias JSON.
+- Se implementó `/api/admin/day` con aislamiento por negocio y auditoría para walk-ins, llegada de citas, estados esperando/en atención/finalizado/no llegó/cancelado, reordenamiento y cálculo de espera.
+- La vista `/turno` permite registrar walk-ins, registrar llegadas, atender, finalizar, reordenar, convertir una llegada en cita y registrar una venta rápida enlazada con caja, POS, reportes y recibos.
+- Se añadió la preparación idempotente de recordatorios para el día siguiente en `message_logs`; el envío externo queda en el pendiente P1 de mensajería.
+- Verificación local: `npm run lint`, `npx tsc --noEmit`, `npx drizzle-kit check` y `npm test` pasan; la suite queda en 33 pruebas aprobadas.
+
+### 17.8 Siguiente orden de ejecución actualizado
+
+1. Completar personalización del link público y portal de cliente.
+2. Integrar mensajería programada y pagos con proveedor/webhooks.
+3. Completar límites de plan, alertas, backups automáticos y permisos por módulo.
+4. Añadir E2E, accesibilidad, pruebas de concurrencia y validación visual final.
+
+### 17.9 Corte implementado — Comisiones y exportación de reportes
+
+- Se añadió `0018_commissions.sql` y el soporte equivalente en `db/init.ts` para reglas, comisiones y lotes, con índices, validaciones e idempotencia por cita y negocio.
+- `/api/admin/commissions` permite crear/editar/activar reglas generales, por profesional, servicio o categoría; aplicar porcentajes o montos fijos; ordenar por prioridad; consultar pendientes/pagadas y liquidar lotes con auditoría.
+- Las comisiones se generan automáticamente una sola vez cuando una cita queda completada y totalmente cobrada, tanto al cambiar el estado como al registrar el cobro final.
+- El módulo `/comisiones` muestra reglas, liquidaciones, lotes e historial; las comisiones se descuentan del ingreso neto y aparecen en reportes.
+- `/api/admin/reports?format=csv` exporta el periodo y filtros actuales con resumen, servicios, profesionales, métodos, productos y comisiones; el panel incluye el botón de descarga.
+- Se añadieron pruebas de aislamiento, prioridad, unicidad e idempotencia de comisiones y liquidación por lotes.
+- Verificación local: `npm run lint`, `npx tsc --noEmit`, `npx drizzle-kit check`, `npm run build` y `npm test` pasan; la suite queda en 35 pruebas aprobadas.
+### 17.10 Corte implementado — personalización pública y portal de cliente
+
+- Se añadió `0019_naive_leper_queen.sql` con `booking_page_settings` y `appointment_portal_tokens`; `db/init.ts` también crea estas tablas para instalaciones existentes.
+- La configuración del negocio ahora persiste titular, descripción, color principal, nota pública y bloques visibles de servicios, profesionales, contacto y políticas, además de los campos comerciales, imágenes, precios, galería y reseñas ya existentes.
+- `/reservar/:slug` consume la configuración real del negocio, muestra los bloques públicos activos, respeta formato horario, precios, anticipación mínima y horizonte máximo, y devuelve un enlace seguro de gestión después de reservar.
+- Las reservas públicas usan `require_confirmation` para iniciar como `programada` o `confirmada`, y la disponibilidad filtra horarios pasados o fuera de los límites configurados.
+- Se implementó `/cita/:token` y `/api/public/appointments/:token` para consultar, confirmar, reprogramar y cancelar con token hash, expiración, rate limiting, validación de disponibilidad, política de cancelación y auditoría sin sesión administrativa.
+- Se añadieron pruebas de migración, aislamiento del token por cita y unicidad del portal; `npm run lint`, `npx tsc --noEmit`, `npx drizzle-kit check`, `npm run build` y `npm test` pasan; la suite queda en 36 pruebas aprobadas.
+
+### 17.11 Corte de producción — identidad de barbería, analítica y cierre de caja
+
+- Identidad visual negra y oro: sidebar `#000`, poste de barbero en la marca, CTAs `#C6A15B`, acento `#C41E3A`. Se eliminó el azul de plantilla en panel, login y reserva pública.
+- Tipografía operativa ampliada: el panel ya no usa textos de 7–10 px. Cuerpo 15 px, títulos de página ~38 px, métricas 28 px, botones e inputs de 42–44 px.
+- Reportes reales con periodos rápidos, comparación vs periodo anterior, tendencia diaria, embudo, ocupación por día/hora, ranking de servicios, equipo, medios y clientes top.
+- Cierre de caja con mix de cobro, conteo opcional por billete, diferencia de arqueo, recibo imprimible, detalle de cierres anteriores y CSV de la sesión.
+- Dashboard con pulso del piso, alertas reales y atajos a turno, caja y analítica. Color público por defecto `#C6A15B`.
+- Las pruebas HTML de renderizado usan el puerto 3210 para no chocar con otro servidor local en 3000.
+
+Pendientes P1 que continúan:
+
+- Mensajería externa con proveedor (WhatsApp/email). El cron ya encola recordatorios.
+- Almacenamiento gestionado de imágenes (R2) y pagos online con webhooks/conciliación.
+- Sucursales, planes con facturación real y E2E de navegador.

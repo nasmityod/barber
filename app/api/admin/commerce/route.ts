@@ -1,4 +1,6 @@
 import { ensureDatabase } from "../../../../db/init";
+import { awardLoyaltyPoints } from "../../../loyalty";
+import { redeemPromotion, revertPromotionUse } from "../../../promotions";
 import {
   assertSameOrigin, cleanText, enforceRateLimit, errorResponse, getAdminContext,
   HttpError, readJson, writeAudit,
@@ -11,6 +13,7 @@ type CommercePayload = {
   clientId?: unknown; discountCents?: unknown; tipCents?: unknown; method?: unknown;
   expenseId?: unknown; description?: unknown; vendor?: unknown; amountCents?: unknown;
   receiptNumber?: unknown; notes?: unknown; paymentId?: unknown; saleId?: unknown; reason?: unknown;
+  promoCode?: unknown;
 };
 
 const METHODS = ["efectivo", "tarjeta", "transferencia", "pago_movil"];
@@ -199,13 +202,20 @@ async function createSale(db: D1Database, context: Awaited<ReturnType<typeof get
     products.push(product);
   }
   const subtotalCents = requested.reduce((sum, item, index) => sum + products[index].priceCents * item.quantity!, 0);
-  const discountCents = integer(body.discountCents, 0, subtotalCents) ?? 0;
+  let discountCents = integer(body.discountCents, 0, subtotalCents) ?? 0;
+  const promoCode = text(body.promoCode, 32);
+  let promo: Awaited<ReturnType<typeof redeemPromotion>> | null = null;
+  if (promoCode) {
+    promo = await redeemPromotion(db, context.businessId, promoCode, subtotalCents, subtotalCents - discountCents);
+    discountCents += promo.discountCents;
+  }
   const tipCents = integer(body.tipCents, 0, 100_000_000) ?? 0;
   const totalCents = subtotalCents - discountCents; const id = crypto.randomUUID(); const now = new Date().toISOString();
   const receiptNumber = `V-${now.slice(0,10).replaceAll("-", "")}-${id.slice(0,6).toUpperCase()}`;
+  const clientId = text(body.clientId, 80) || null;
   const statements: D1PreparedStatement[] = [db.prepare(`INSERT INTO product_sales
     (id,business_id,cash_session_id,client_id,subtotal_cents,discount_cents,total_cents,tip_cents,method,status,receipt_number,created_by,created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,'completed',?,?,?)`).bind(id, context.businessId, sessionId, text(body.clientId, 80) || null,
+    VALUES (?,?,?,?,?,?,?,?,?,'completed',?,?,?)`).bind(id, context.businessId, sessionId, clientId,
       subtotalCents, discountCents, totalCents, tipCents, text(body.method, 24), receiptNumber, context.user.userId, now)];
   requested.forEach((item, index) => {
     const product = products[index]; const quantity = item.quantity!; const lineTotalCents = product.priceCents * quantity;
@@ -220,9 +230,15 @@ async function createSale(db: D1Database, context: Awaited<ReturnType<typeof get
   });
   statements.push(db.prepare(`INSERT INTO receipts (id,business_id,receipt_number,sale_id,snapshot,created_at)
     VALUES (?,?,?,?,?,?)`).bind(crypto.randomUUID(), context.businessId, receiptNumber, id, JSON.stringify({ saleId:id, receiptNumber }), now));
-  await db.batch(statements);
-  await writeAudit(db, { businessId: context.businessId, user: context.user, action: "sale.created", entityType: "product_sale", entityId: id, metadata: { totalCents, tipCents } });
-  return Response.json({ id, receiptNumber, totalCents, tipCents }, { status: 201, headers: { "cache-control": "no-store" } });
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (promo) await revertPromotionUse(db, context.businessId, promo.id);
+    throw error;
+  }
+  await writeAudit(db, { businessId: context.businessId, user: context.user, action: "sale.created", entityType: "product_sale", entityId: id, metadata: { totalCents, tipCents, ...(promo ? { promoCode: promo.code, promoDiscountCents: promo.discountCents } : {}) } });
+  if (clientId) await awardLoyaltyPoints(db, context.businessId, clientId, totalCents, "Puntos por compra en tienda", context.user.userId);
+  return Response.json({ id, receiptNumber, totalCents, tipCents, promoDiscountCents: promo?.discountCents ?? 0 }, { status: 201, headers: { "cache-control": "no-store" } });
 }
 
 async function createExpense(db: D1Database, context: Awaited<ReturnType<typeof getAdminContext>>, body: CommercePayload) {

@@ -9,9 +9,40 @@ export async function GET(request: Request) {
     const db = await ensureDatabase();
     const rateKey = await sha256(`catalog:${new Date().toISOString().slice(0, 10)}:${clientAddress(request)}`);
     await enforceRateLimit(db, `catalog:${rateKey}`, 120, 60 * 60 * 1000);
-    const business = await db.prepare(`SELECT id, name, slug, timezone, currency
-      FROM businesses WHERE slug = ?`).bind(slug)
-      .first<{ id: string; name: string; slug: string; timezone: string; currency: string }>();
+    const business = await db.prepare(`SELECT business.id, business.name, business.slug, business.timezone, business.currency,
+        COALESCE(settings.time_format, '24h') AS timeFormat,
+        COALESCE(settings.business_phone, '') AS businessPhone,
+        COALESCE(settings.business_email, '') AS businessEmail,
+        COALESCE(settings.address, '') AS address,
+        COALESCE(settings.whatsapp_number, '') AS whatsappNumber,
+        COALESCE(settings.logo_url, '') AS logoUrl,
+        COALESCE(settings.cover_image_url, '') AS coverImageUrl,
+        COALESCE(settings.booking_lead_minutes, 60) AS bookingLeadMinutes,
+        COALESCE(settings.booking_max_days, 60) AS bookingMaxDays,
+        COALESCE(settings.allow_client_cancellation, 1) AS allowClientCancellation,
+        COALESCE(settings.cancellation_window_hours, 24) AS cancellationWindowHours,
+        COALESCE(settings.cancellation_fee_percent, 0) AS cancellationFeePercent,
+        COALESCE(settings.show_prices, 1) AS showPrices,
+        COALESCE(page.headline, 'Tu mejor versión empieza aquí.') AS headline,
+        COALESCE(page.subtitle, 'Elige un servicio, consulta disponibilidad real y confirma sin esperas.') AS subtitle,
+        COALESCE(page.primary_color, '#C6A15B') AS primaryColor,
+        COALESCE(page.public_note, 'Reserva online disponible todos los días.') AS publicNote,
+        COALESCE(page.show_services, 1) AS showServices,
+        COALESCE(page.show_professionals, 1) AS showProfessionals,
+        COALESCE(page.show_contact, 1) AS showContact,
+        COALESCE(page.show_policies, 1) AS showPolicies,
+        COALESCE(settings.show_gallery, 1) AS showGallery,
+        COALESCE(settings.show_reviews, 1) AS showReviews
+      FROM businesses business
+      LEFT JOIN business_settings settings ON settings.business_id = business.id
+      LEFT JOIN booking_page_settings page ON page.business_id = business.id
+      WHERE business.slug = ?`).bind(slug)
+      .first<{ id: string; name: string; slug: string; timezone: string; currency: string; timeFormat: string;
+        businessPhone: string; businessEmail: string; address: string; whatsappNumber: string; logoUrl: string;
+        coverImageUrl: string; bookingLeadMinutes: number; bookingMaxDays: number; allowClientCancellation: number;
+        cancellationWindowHours: number; cancellationFeePercent: number; showPrices: number; headline: string;
+        subtitle: string; primaryColor: string; publicNote: string; showServices: number; showProfessionals: number;
+        showContact: number; showPolicies: number; showGallery: number; showReviews: number }>();
     if (!business) throw new HttpError(404, "Barbería no encontrada.");
     const [services, professionals, gallery, reviews] = await Promise.all([
       db.prepare(`SELECT s.id, s.name, s.category, s.duration_minutes AS durationMinutes, s.price_cents AS priceCents
@@ -31,10 +62,22 @@ export async function GET(request: Request) {
       db.prepare(`SELECT r.id,r.rating,r.comment,r.created_at AS createdAt,c.name AS clientName FROM reviews r LEFT JOIN clients c ON c.id=r.client_id AND c.business_id=r.business_id WHERE r.business_id=? AND r.status='published' ORDER BY r.published_at DESC, r.created_at DESC LIMIT 30`).bind(business.id).all(),
     ]);
     return Response.json({
-      business: { name: business.name, slug: business.slug, timezone: business.timezone, currency: business.currency },
+      business: {
+        name: business.name, slug: business.slug, timezone: business.timezone, currency: business.currency,
+        timeFormat: business.timeFormat, businessPhone: business.businessPhone, businessEmail: business.businessEmail,
+        address: business.address, whatsappNumber: business.whatsappNumber, logoUrl: business.logoUrl,
+        coverImageUrl: business.coverImageUrl, bookingLeadMinutes: business.bookingLeadMinutes,
+        bookingMaxDays: business.bookingMaxDays, allowClientCancellation: business.allowClientCancellation === 1,
+        cancellationWindowHours: business.cancellationWindowHours, cancellationFeePercent: business.cancellationFeePercent,
+        showPrices: business.showPrices === 1, showGallery: business.showGallery === 1, showReviews: business.showReviews === 1,
+        headline: business.headline, subtitle: business.subtitle, primaryColor: /^#2563eb$/i.test(business.primaryColor) ? "#C6A15B" : business.primaryColor,
+        publicNote: business.publicNote, showServices: business.showServices === 1,
+        showProfessionals: business.showProfessionals === 1, showContact: business.showContact === 1,
+        showPolicies: business.showPolicies === 1,
+      },
       services: services.results ?? [],
-      gallery: gallery.results ?? [],
-      reviews: reviews.results ?? [],
+      gallery: business.showGallery === 1 ? gallery.results ?? [] : [],
+      reviews: business.showReviews === 1 ? reviews.results ?? [] : [],
       professionals: (professionals.results ?? []).map(({serviceIdsCsv,...professional})=>({
         ...professional,serviceIds:serviceIdsCsv?serviceIdsCsv.split(","):[],
       })),

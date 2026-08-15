@@ -136,6 +136,38 @@ export function localDate(timezone: string) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
+export function localDateAfter(timezone: string, days: number) {
+  const base = new Date(`${localDate(timezone)}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + days);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(base);
+}
+
+export function localDateTimeParts(timezone: string, value = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(value);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour"), minute: get("minute") };
+}
+
+export function localDateTimeTimestamp(date: string, time: string, timezone: string) {
+  const target = Date.parse(`${date}T${time}:00Z`);
+  if (!Number.isFinite(target)) return Number.NaN;
+  const projected = localDateTimeParts(timezone, new Date(target));
+  const projectedAsUtc = Date.UTC(projected.year, projected.month - 1, projected.day, projected.hour, projected.minute);
+  return target + (target - projectedAsUtc);
+}
+
+export function isWithinBookingWindow(date: string, time: string, timezone: string, leadMinutes: number, maxDays: number) {
+  const today = localDate(timezone);
+  const lastDate = localDateAfter(timezone, maxDays);
+  if (date < today || date > lastDate || !isTime(time)) return false;
+  if (date !== today) return true;
+  const current = localDateTimeParts(timezone);
+  return timeToMinutes(time) >= current.hour * 60 + current.minute + leadMinutes;
+}
+
 export function weekdayForDate(date: string) {
   return new Date(`${date}T12:00:00Z`).getUTCDay();
 }

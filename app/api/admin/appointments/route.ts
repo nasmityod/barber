@@ -1,5 +1,6 @@
 import { ensureDatabase } from "../../../../db/init";
 import { createAppointment, updateAppointment } from "../../../appointments";
+import { auditGeneratedCommission, generateCommissionForAppointment } from "../../../commissions";
 import {
   assertSameOrigin, cleanText, enforceRateLimit, errorResponse, getAdminContext,
   HttpError, isDate, normalizeEmail, readJson, sha256, writeAudit,
@@ -7,7 +8,7 @@ import {
 
 type AppointmentPayload = {
   name?: unknown; email?: unknown; phone?: unknown; serviceId?: unknown;
-  professionalId?: unknown; date?: unknown; time?: unknown; notes?: unknown;
+  professionalId?: unknown; date?: unknown; time?: unknown; notes?: unknown; resourceId?: unknown;
 };
 
 type StatusPayload = { id?: unknown; status?: unknown; reason?: unknown };
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
     const db = await ensureDatabase();
     const select = `SELECT a.id, a.client_id AS clientId, a.appointment_date AS date, a.start_time AS time,
       a.end_time AS endTime, a.status, a.source, a.total_cents AS totalCents,
-      a.recurring_series_id AS recurringSeriesId, a.occurrence_number AS occurrenceNumber,
+      a.recurring_series_id AS recurringSeriesId, a.occurrence_number AS occurrenceNumber, a.resource_id AS resourceId,
       COALESCE(payment.paid_cents, 0) AS paidCents,
       CASE WHEN COALESCE(payment.paid_cents, 0) = 0 THEN 'pendiente'
         WHEN COALESCE(payment.paid_cents, 0) < a.total_cents THEN 'parcial'
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
       businessId: context.businessId, timezone: context.timezone,
       name: cleanText(body.name, 100), email: normalizeEmail(body.email), phone: cleanText(body.phone, 25),
       serviceId: cleanText(body.serviceId, 80), professionalId: cleanText(body.professionalId, 80),
-      date: cleanText(body.date, 10), time: cleanText(body.time, 5), notes: cleanText(body.notes, 500),
+      date: cleanText(body.date, 10), time: cleanText(body.time, 5), notes: cleanText(body.notes, 500), resourceId: body.resourceId === undefined ? undefined : cleanText(body.resourceId, 80) || null,
       source: "panel", idempotencyHash: await sha256(`${context.businessId}:${idempotencyKey}`), actor: context.user,
     });
     return Response.json({ id: result.id, clientId: result.clientId ?? null, message: result.duplicate ? "Cita ya creada" : "Cita creada" },
@@ -96,7 +97,7 @@ export async function PUT(request: Request) {
       id: cleanText(body.id, 80), businessId: context.businessId, timezone: context.timezone,
       name: cleanText(body.name, 100), email: normalizeEmail(body.email), phone: cleanText(body.phone, 25),
       serviceId: cleanText(body.serviceId, 80), professionalId: cleanText(body.professionalId, 80),
-      date: cleanText(body.date, 10), time: cleanText(body.time, 5), notes: cleanText(body.notes, 500),
+      date: cleanText(body.date, 10), time: cleanText(body.time, 5), notes: cleanText(body.notes, 500), resourceId: body.resourceId === undefined ? undefined : cleanText(body.resourceId, 80) || null,
       actor: context.user,
     });
     return Response.json({ appointment },
@@ -140,6 +141,10 @@ export async function PATCH(request: Request) {
       if (status === "cancelada" || status === "no_asistio") statements.push(db.prepare("DELETE FROM appointment_slots WHERE appointment_id = ? AND business_id = ?").bind(id, context.businessId));
       await db.batch(statements);
       await writeAudit(db, { businessId: context.businessId, user: context.user, action: "appointment.status_updated", entityType: "appointment", entityId: id, metadata: { from: appointment.status, to: status, reason: cancellationReason || null } });
+      if (status === "completada") {
+        const commission = await generateCommissionForAppointment(db, context.businessId, id);
+        if (commission?.created) await auditGeneratedCommission(db, context.businessId, context.user, commission);
+      }
     }
     return Response.json({ id, status, cancellationReason: status === "cancelada" ? (reason || appointment.cancellationReason) : appointment.cancellationReason }, { headers: { "cache-control": "no-store" } });
   } catch (error) {

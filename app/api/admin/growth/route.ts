@@ -91,6 +91,19 @@ export async function POST(request: Request) {
       let queued=0; for(const appointment of appointments.results??[]){ const body=`Hola ${appointment.name}, te recordamos tu cita de ${appointment.serviceName} el ${appointment.date} a las ${appointment.time}.`; for(const [channel,recipient] of [["whatsapp",appointment.phone],["email",appointment.email]] as const){ if(!recipient||String(recipient).includes("@local.invalid"))continue; const exists=await db.prepare("SELECT id FROM message_logs WHERE business_id=? AND appointment_id=? AND kind='appointment_reminder' AND channel=? AND scheduled_at=?").bind(context.businessId,appointment.id,channel,target).first(); if(exists)continue; await db.prepare("INSERT INTO message_logs (id,business_id,client_id,appointment_id,channel,kind,recipient,body,status,scheduled_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)").bind(crypto.randomUUID(),context.businessId,appointment.clientId,appointment.id,channel,"appointment_reminder",recipient,body,"queued",target,now).run(); queued++; } }
       return Response.json({queued,date:target});
     }
+    if (action === "message_status") {
+      const id = cleanText(input.id, 80);
+      const status = ["sent", "failed", "cancelled"].includes(String(input.status)) ? String(input.status) : "";
+      if (!id || !status) throw new HttpError(400, "Indica el mensaje y su nuevo estado.");
+      const updated = await db.prepare(`UPDATE message_logs SET status = ?,
+          sent_at = CASE WHEN ? = 'sent' THEN COALESCE(sent_at, ?) ELSE sent_at END,
+          error = CASE WHEN ? = 'failed' THEN ? ELSE error END
+        WHERE id = ? AND business_id = ? AND status IN ('queued','failed') RETURNING id`)
+        .bind(status, status, now, status, cleanText(input.error, 300) || "Marcado como fallido desde el panel", id, context.businessId)
+        .first<{ id:string }>();
+      if (!updated) throw new HttpError(404, "El mensaje ya no admite cambios.");
+      return Response.json({ id, status });
+    }
     if (action === "message_queue") {
       const clientId=cleanText(input.clientId,80); const channel=input.channel==="email"?"email":"whatsapp"; const recipient=cleanText(input.recipient,254); const body=cleanText(input.body,1000); if(!body||!recipient)throw new HttpError(400,"El mensaje necesita destinatario y contenido."); if(channel==="email"&&!isEmail(recipient)||channel==="whatsapp"&&!isPhone(recipient))throw new HttpError(400,"El destinatario no es válido."); const id=crypto.randomUUID(); await db.prepare("INSERT INTO message_logs (id,business_id,client_id,channel,kind,recipient,body,status,scheduled_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(id,context.businessId,clientId||null,channel,"manual",recipient,body,"queued",now,now).run(); return Response.json({id});
     }

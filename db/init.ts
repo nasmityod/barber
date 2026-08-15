@@ -10,6 +10,25 @@ export async function ensureDatabase() {
       timezone TEXT NOT NULL DEFAULT 'America/Caracas', currency TEXT NOT NULL DEFAULT 'USD',
       owner_email TEXT, created_at TEXT
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS business_settings (
+      business_id TEXT PRIMARY KEY, country TEXT NOT NULL DEFAULT 'VE', time_format TEXT NOT NULL DEFAULT '24h',
+      payment_methods TEXT NOT NULL DEFAULT '["cash","card","transfer","mobile"]',
+      cancellation_window_hours INTEGER NOT NULL DEFAULT 24, cancellation_fee_percent INTEGER NOT NULL DEFAULT 0,
+      allow_client_cancellation INTEGER NOT NULL DEFAULT 1, business_phone TEXT NOT NULL DEFAULT '',
+      business_email TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', whatsapp_number TEXT NOT NULL DEFAULT '',
+      logo_url TEXT NOT NULL DEFAULT '', cover_image_url TEXT NOT NULL DEFAULT '', booking_lead_minutes INTEGER NOT NULL DEFAULT 60,
+      booking_max_days INTEGER NOT NULL DEFAULT 60, require_confirmation INTEGER NOT NULL DEFAULT 0,
+      show_prices INTEGER NOT NULL DEFAULT 1, show_gallery INTEGER NOT NULL DEFAULT 1, show_reviews INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS booking_page_settings (
+      business_id TEXT PRIMARY KEY, headline TEXT NOT NULL DEFAULT 'Tu mejor versión empieza aquí.',
+      subtitle TEXT NOT NULL DEFAULT 'Elige un servicio, consulta disponibilidad real y confirma sin esperas.',
+      primary_color TEXT NOT NULL DEFAULT '#C6A15B', public_note TEXT NOT NULL DEFAULT 'Reserva online disponible todos los días.',
+      show_services INTEGER NOT NULL DEFAULT 1, show_professionals INTEGER NOT NULL DEFAULT 1,
+      show_contact INTEGER NOT NULL DEFAULT 1, show_policies INTEGER NOT NULL DEFAULT 1,
+      section_order TEXT NOT NULL DEFAULT '["services","gallery","reviews","contact"]', updated_at TEXT NOT NULL
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS plans (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', monthly_price_cents INTEGER NOT NULL DEFAULT 0,
       max_professionals INTEGER NOT NULL DEFAULT 1, max_appointments INTEGER NOT NULL DEFAULT 100, active INTEGER NOT NULL DEFAULT 1
@@ -27,6 +46,12 @@ export async function ensureDatabase() {
     db.prepare(`CREATE TABLE IF NOT EXISTS professionals (
       id TEXT PRIMARY KEY, business_id TEXT NOT NULL, name TEXT NOT NULL,
       specialty TEXT NOT NULL, email TEXT, phone TEXT, active INTEGER NOT NULL DEFAULT 1
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS resources (
+      id TEXT PRIMARY KEY, business_id TEXT NOT NULL, name TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'station', notes TEXT NOT NULL DEFAULT '',
+      service_ids TEXT NOT NULL DEFAULT '[]', professional_ids TEXT NOT NULL DEFAULT '[]',
+      active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS professional_services (
       business_id TEXT NOT NULL, professional_id TEXT NOT NULL, service_id TEXT NOT NULL,
@@ -53,13 +78,27 @@ export async function ensureDatabase() {
       start_time TEXT NOT NULL, end_time TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'programada',
       source TEXT NOT NULL DEFAULT 'panel', notes TEXT NOT NULL DEFAULT '', cancellation_reason TEXT NOT NULL DEFAULT '',
       recurring_series_id TEXT, occurrence_number INTEGER, total_cents INTEGER NOT NULL,
+      resource_id TEXT,
       created_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS appointment_portal_tokens (
+      token_hash TEXT PRIMARY KEY, business_id TEXT NOT NULL, appointment_id TEXT NOT NULL,
+      expires_at TEXT NOT NULL, created_at TEXT NOT NULL, last_accessed_at TEXT
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS day_queue_entries (
+      id TEXT PRIMARY KEY, business_id TEXT NOT NULL, queue_date TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'walk_in', status TEXT NOT NULL DEFAULT 'waiting', position INTEGER NOT NULL DEFAULT 1,
+      appointment_id TEXT, client_id TEXT NOT NULL, service_id TEXT, professional_id TEXT,
+      arrived_at TEXT NOT NULL, started_at TEXT, finished_at TEXT,
+      sale_id TEXT, sale_amount_cents INTEGER NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS cash_sessions (
       id TEXT PRIMARY KEY, business_id TEXT NOT NULL, opened_by TEXT NOT NULL,
       opened_at TEXT NOT NULL, opening_amount_cents INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'open', closed_by TEXT, closed_at TEXT,
       expected_cash_cents INTEGER, counted_cash_cents INTEGER,
+      counted_breakdown TEXT NOT NULL DEFAULT '', closing_summary TEXT NOT NULL DEFAULT '',
       notes TEXT NOT NULL DEFAULT ''
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS payments (
@@ -112,6 +151,28 @@ export async function ensureDatabase() {
       id TEXT PRIMARY KEY, business_id TEXT NOT NULL, cash_session_id TEXT NOT NULL,
       payment_id TEXT, sale_id TEXT, amount_cents INTEGER NOT NULL, method TEXT NOT NULL,
       reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'completed', created_by TEXT NOT NULL, created_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS commission_rules (
+      id TEXT PRIMARY KEY, business_id TEXT NOT NULL, name TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'default', professional_id TEXT, service_id TEXT, category TEXT,
+      kind TEXT NOT NULL DEFAULT 'percent', value INTEGER NOT NULL DEFAULT 0, priority INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+      CHECK (scope IN ('default','professional','service','category')), CHECK (kind IN ('percent','fixed')),
+      CHECK (value >= 0), CHECK (priority >= 0)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS commission_batches (
+      id TEXT PRIMARY KEY, business_id TEXT NOT NULL, name TEXT NOT NULL, period_from TEXT, period_to TEXT,
+      status TEXT NOT NULL DEFAULT 'paid', total_cents INTEGER NOT NULL DEFAULT 0, commission_count INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT NOT NULL, created_at TEXT NOT NULL, paid_at TEXT
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS commissions (
+      id TEXT PRIMARY KEY, business_id TEXT NOT NULL, appointment_id TEXT NOT NULL, professional_id TEXT NOT NULL,
+      service_id TEXT NOT NULL, rule_id TEXT NOT NULL, source_payment_id TEXT, batch_id TEXT,
+      professional_name TEXT NOT NULL, service_name TEXT NOT NULL, rule_name TEXT NOT NULL,
+      kind TEXT NOT NULL, value INTEGER NOT NULL, basis_cents INTEGER NOT NULL, amount_cents INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, paid_at TEXT, paid_by TEXT,
+      CHECK (kind IN ('percent','fixed')), CHECK (status IN ('pending','paid','cancelled')),
+      CHECK (value >= 0), CHECK (basis_cents >= 0), CHECK (amount_cents >= 0)
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS receipts (
       id TEXT PRIMARY KEY, business_id TEXT NOT NULL, receipt_number TEXT NOT NULL,
@@ -448,6 +509,9 @@ export async function ensureDatabase() {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_recurring_series_business_status ON recurring_appointment_series(business_id, status, start_date)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_appointments_business_date ON appointments(business_id, appointment_date, start_time)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_appointments_professional_slot ON appointments(professional_id, appointment_date, start_time)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_day_queue_business_date ON day_queue_entries(business_id, queue_date, position)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_day_queue_business_status ON day_queue_entries(business_id, queue_date, status)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_day_queue_business_appointment ON day_queue_entries(business_id, appointment_id) WHERE appointment_id IS NOT NULL"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_sessions_one_open ON cash_sessions(business_id) WHERE status = 'open'"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_cash_sessions_business_opened ON cash_sessions(business_id, opened_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_payments_business_created ON payments(business_id, created_at)"),
@@ -471,6 +535,13 @@ export async function ensureDatabase() {
   if (!(paymentColumns.results ?? []).some((column) => column.name === "tip_cents")) {
     await db.prepare("ALTER TABLE payments ADD COLUMN tip_cents INTEGER NOT NULL DEFAULT 0").run();
   }
+  const cashSessionColumns = await db.prepare("PRAGMA table_info(cash_sessions)").all<{ name:string }>();
+  if (!(cashSessionColumns.results ?? []).some((column) => column.name === "counted_breakdown")) {
+    await db.prepare("ALTER TABLE cash_sessions ADD COLUMN counted_breakdown TEXT NOT NULL DEFAULT ''").run();
+  }
+  if (!(cashSessionColumns.results ?? []).some((column) => column.name === "closing_summary")) {
+    await db.prepare("ALTER TABLE cash_sessions ADD COLUMN closing_summary TEXT NOT NULL DEFAULT ''").run();
+  }
   const businessColumns = await db.prepare("PRAGMA table_info(businesses)").all<{ name:string }>();
   if (!(businessColumns.results ?? []).some((column) => column.name === "owner_email")) await db.prepare("ALTER TABLE businesses ADD COLUMN owner_email TEXT").run();
   if (!(businessColumns.results ?? []).some((column) => column.name === "created_at")) await db.prepare("ALTER TABLE businesses ADD COLUMN created_at TEXT").run();
@@ -483,6 +554,15 @@ export async function ensureDatabase() {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_expenses_business_created ON expenses(business_id, created_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_refunds_business_created ON refunds(business_id, created_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_refunds_payment ON refunds(business_id, payment_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_commission_rules_business_active ON commission_rules(business_id, active, priority)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_commission_rules_professional ON commission_rules(business_id, professional_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_commission_rules_service ON commission_rules(business_id, service_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_commission_batches_business_created ON commission_batches(business_id, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_commission_batches_business_status ON commission_batches(business_id, status)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_commissions_business_appointment ON commissions(business_id, appointment_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_commissions_business_created ON commissions(business_id, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_commissions_business_status ON commissions(business_id, status, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_commissions_batch ON commissions(business_id, batch_id)"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_receipts_business_number ON receipts(business_id, receipt_number)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_receipts_business_created ON receipts(business_id, created_at)"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_promotions_business_code ON promotions(business_id, code)"),
@@ -502,6 +582,10 @@ export async function ensureDatabase() {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON password_reset_tokens(expires_at)"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_terms_member_version ON terms_acceptances(member_id, version)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_alerts_business_created ON alerts(business_id, created_at)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_resources_business_name ON resources(business_id, name COLLATE NOCASE)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_resources_business_active ON resources(business_id, active, name)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_appointment_portal_appointment ON appointment_portal_tokens(business_id, appointment_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_appointment_portal_expires ON appointment_portal_tokens(expires_at)"),
     db.prepare("INSERT OR IGNORE INTO plans (id,name,description,monthly_price_cents,max_professionals,max_appointments) VALUES ('free','Gratis','Para empezar sin tarjeta',0,1,100)"),
     db.prepare("INSERT OR IGNORE INTO plans (id,name,description,monthly_price_cents,max_professionals,max_appointments) VALUES ('pro','Pro','Para barberías en crecimiento',1900,5,1000)"),
     db.prepare("INSERT OR IGNORE INTO plans (id,name,description,monthly_price_cents,max_professionals,max_appointments) VALUES ('business','Business','Para equipos y varias operaciones',4900,25,10000)"),
@@ -517,10 +601,38 @@ export async function ensureDatabase() {
   if (!(appointmentColumns.results ?? []).some((column) => column.name === "occurrence_number")) {
     await db.prepare("ALTER TABLE appointments ADD COLUMN occurrence_number INTEGER").run();
   }
+  if (!(appointmentColumns.results ?? []).some((column) => column.name === "resource_id")) {
+    await db.prepare("ALTER TABLE appointments ADD COLUMN resource_id TEXT").run();
+  }
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_appointments_recurring_series ON appointments(business_id, recurring_series_id, appointment_date)").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS idx_appointments_resource_slot ON appointments(business_id, resource_id, appointment_date, start_time)").run();
+  await db.batch([
+    db.prepare(`CREATE TRIGGER IF NOT EXISTS appointments_no_resource_overlap_insert
+      BEFORE INSERT ON appointments
+      WHEN NEW.resource_id IS NOT NULL AND NEW.status NOT IN ('cancelada','no_asistio') AND EXISTS (
+        SELECT 1 FROM appointments AS existing
+        WHERE existing.id <> NEW.id AND existing.business_id = NEW.business_id
+          AND existing.resource_id = NEW.resource_id AND existing.appointment_date = NEW.appointment_date
+          AND existing.status NOT IN ('cancelada','no_asistio')
+          AND NEW.start_time < existing.end_time AND NEW.end_time > existing.start_time
+      )
+      BEGIN SELECT RAISE(ABORT, 'resource_time_overlap'); END`),
+    db.prepare(`CREATE TRIGGER IF NOT EXISTS appointments_no_resource_overlap_update
+      BEFORE UPDATE OF resource_id, appointment_date, start_time, end_time, status ON appointments
+      WHEN NEW.resource_id IS NOT NULL AND NEW.status NOT IN ('cancelada','no_asistio') AND EXISTS (
+        SELECT 1 FROM appointments AS existing
+        WHERE existing.id <> NEW.id AND existing.business_id = NEW.business_id
+          AND existing.resource_id = NEW.resource_id AND existing.appointment_date = NEW.appointment_date
+          AND existing.status NOT IN ('cancelada','no_asistio')
+          AND NEW.start_time < existing.end_time AND NEW.end_time > existing.start_time
+      )
+      BEGIN SELECT RAISE(ABORT, 'resource_time_overlap'); END`),
+  ]);
 
   await db.batch([
     db.prepare("INSERT OR IGNORE INTO businesses (id,name,slug,owner_email,created_at) VALUES ('biz_demo','Corteza Studio','demo','owner@corteza.studio',?)").bind(new Date().toISOString()),
+    db.prepare("INSERT OR IGNORE INTO business_settings (business_id,updated_at) VALUES ('biz_demo',?)").bind(new Date().toISOString()),
+    db.prepare("INSERT OR IGNORE INTO booking_page_settings (business_id,updated_at) VALUES ('biz_demo',?)").bind(new Date().toISOString()),
     db.prepare(`INSERT OR IGNORE INTO subscriptions (id,business_id,plan_id,status,provider,current_period_start,current_period_end,created_at)
       VALUES ('sub_demo','biz_demo','free','active','manual',date('now'),date('now','+1 year'),?)`).bind(new Date().toISOString()),
     db.prepare("INSERT OR IGNORE INTO services (id,business_id,name,category,duration_minutes,price_cents) VALUES ('svc_corte','biz_demo','Corte Signature','Cortes',35,1800)"),
