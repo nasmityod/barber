@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const rateKey = await sha256(`catalog:${new Date().toISOString().slice(0, 10)}:${clientAddress(request)}`);
     await enforceRateLimit(db, `catalog:${rateKey}`, 120, 60 * 60 * 1000);
     const business = await db.prepare(`SELECT business.id, business.name, business.slug, business.timezone, business.currency,
-        COALESCE(settings.time_format, '24h') AS timeFormat,
+        COALESCE(settings.time_format, '12h') AS timeFormat,
         COALESCE(settings.business_phone, '') AS businessPhone,
         COALESCE(settings.business_email, '') AS businessEmail,
         COALESCE(settings.address, '') AS address,

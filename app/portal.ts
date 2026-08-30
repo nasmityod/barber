@@ -50,7 +50,7 @@ export async function getPortalAppointment(db: D1Database, token: string, touch 
   const row = await db.prepare(`SELECT access.token_hash AS tokenHash,
       access.business_id AS businessId, access.expires_at AS expiresAt,
       business.name AS businessName, business.slug AS businessSlug, business.timezone, business.currency,
-      COALESCE(settings.time_format, '24h') AS timeFormat,
+      COALESCE(settings.time_format, '12h') AS timeFormat,
       appointment.id AS appointmentId, appointment.status,
       appointment.appointment_date AS appointmentDate, appointment.start_time AS startTime,
       appointment.end_time AS endTime, appointment.notes,

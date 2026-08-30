@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { apiError, isJsonObject, readJsonObject, stringArray } from "./api-json";
+import { confirmAction, DialogHost, promptText } from "./dialogs";
 import { CommerceManager } from "./CommerceManager";
 import { GrowthManager } from "./GrowthManager";
 import { SettingsPanel } from "./SettingsPanel";
@@ -20,6 +21,7 @@ import {
   Star, UserRound, UsersRound, WalletCards, X, CheckCircle2, TrendingUp,
   Armchair, Megaphone, ShieldCheck, ArrowUpRight, MoreHorizontal, LogOut,
   CalendarOff, Trash2, Pencil, GripVertical, Upload, Download, ListOrdered,
+  CornerDownLeft, Scissors as ScissorsIcon,
 } from "lucide-react";
 
 type Appointment = {
@@ -177,6 +179,7 @@ const titles: Record<string, [string, string]> = {
 export function AdminApp({ section, identity }: { section: string; identity: AdminIdentity }) {
   const active = titles[section] ? section : "dashboard";
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -262,13 +265,13 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
             {group.items.map(([slug, label, Icon]) => <a className={active === slug ? "active" : ""} href={`/${slug}`} key={slug} onClick={() => setMobileOpen(false)}><Icon size={18} /><span>{label}</span>{slug === "citas" && <em>{appointments.filter((item)=>["programada","confirmada"].includes(item.status)).length}</em>}</a>)}
           </div>)}
         </nav>
-        <div className="sidebar-footer"><div className="plan-line"><span>Espacio Corteza</span><strong>{appointments.length}</strong></div><div className="plan-progress"><i style={{width:`${Math.min(100,appointments.length*2)}%`}} /></div><small>{appointments.length} citas registradas</small></div>
+        <PlanMeter appointments={appointments} timezone={identity.timezone} />
       </aside>
 
       <main className="admin-main">
         <header className="topbar">
           <button className="icon-button menu-button" onClick={() => setMobileOpen(true)} aria-label="Abrir menú"><Menu size={20} /></button>
-          <div className="topbar-search"><Search size={17} /><input aria-label="Buscar" placeholder="Buscar cliente, cita o servicio..." /></div>
+          <button type="button" className="topbar-search" onClick={() => setCommandOpen(true)} aria-label="Buscar en todo el panel"><Search size={17} /><span style={{ flex: 1, textAlign: "left", fontSize: 14, color: "var(--faint)" }}>Buscar cliente, cita, servicio o sección…</span><kbd>Ctrl K</kbd></button>
           <a className="public-link" href={`/reservar/${identity.businessSlug}`} target="_blank" rel="noreferrer"><Sparkles size={16} /> Página de reservas</a>
           <AlertsBell />
           <div className="account-menu">
@@ -279,11 +282,11 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
 
         <div className="page-content">
           <div className="page-heading"><div><p className="eyebrow">{identity.businessName}</p><h1>{title}</h1><p>{displaySubtitle}</p></div><div className="heading-actions"><button className="secondary" onClick={copyLink}><Copy size={16} /> Link de reservas</button>{canWriteAppointments&&<button className="primary" onClick={() => setModalOpen(true)} disabled={!catalog}><Plus size={17} /> Nueva cita</button>}</div></div>
-          {loading && <div className="loading-line" />}
           {loadError && <p className="form-error" role="alert">{loadError}</p>}
-          {active === "dashboard" ? <Dashboard appointments={appointments} timezone={identity.timezone} slug={identity.businessSlug} /> : <ModuleView section={active} appointments={appointments} recurringSeries={recurringSeries} catalog={catalog} identity={identity} canWrite={canWriteAppointments} onServicesChanged={(services)=>setCatalog((current)=>current?{...current,services}:current)} onProfessionalsChanged={(professionals,changed)=>{setCatalog((current)=>current?{...current,professionals}:current);if(changed)setAppointments((items)=>items.map((item)=>item.professionalId===changed.id?{...item,professionalName:changed.name}:item))}} onClientUpdated={(client)=>setAppointments((items)=>items.map((item)=>item.clientId===client.id?{...item,clientName:client.name,email:client.email,phone:client.phone}:item))} onPaymentChanged={(appointmentId,paidCents,totalCents)=>setAppointments((items)=>items.map((item)=>item.id===appointmentId?{...item,paidCents,totalCents:totalCents??item.totalCents,paymentStatus:paymentStatusFor(totalCents??item.totalCents,paidCents)}:item))} onNew={() => setModalOpen(true)} onNewRecurring={()=>setRecurringModalOpen(true)} onEditSeries={setEditingSeries} onCancelSeries={async(series)=>{
-            const answer=window.prompt(`Motivo para cancelar las citas futuras de ${series.clientName}:`,"");if(answer===null)return;
-            const reason=answer.trim();if(!reason){setNotice("El motivo de cancelación es obligatorio");return}
+          {loading && <ModuleSkeleton />}
+          {!loading && (active === "dashboard" ? <Dashboard appointments={appointments} timezone={identity.timezone} slug={identity.businessSlug} catalog={catalog} /> : <ModuleView section={active} appointments={appointments} recurringSeries={recurringSeries} catalog={catalog} identity={identity} canWrite={canWriteAppointments} onServicesChanged={(services)=>setCatalog((current)=>current?{...current,services}:current)} onProfessionalsChanged={(professionals,changed)=>{setCatalog((current)=>current?{...current,professionals}:current);if(changed)setAppointments((items)=>items.map((item)=>item.professionalId===changed.id?{...item,professionalName:changed.name}:item))}} onClientUpdated={(client)=>setAppointments((items)=>items.map((item)=>item.clientId===client.id?{...item,clientName:client.name,email:client.email,phone:client.phone}:item))} onPaymentChanged={(appointmentId,paidCents,totalCents)=>setAppointments((items)=>items.map((item)=>item.id===appointmentId?{...item,paidCents,totalCents:totalCents??item.totalCents,paymentStatus:paymentStatusFor(totalCents??item.totalCents,paidCents)}:item))} onNew={() => setModalOpen(true)} onNewRecurring={()=>setRecurringModalOpen(true)} onEditSeries={setEditingSeries} onCancelSeries={async(series)=>{
+            const reason=await promptText({title:"Cancelar las citas futuras",message:`Se cancelarán las citas programadas o confirmadas de ${series.clientName}. Las citas ya completadas no se tocan.`,destructive:true,confirmLabel:"Cancelar la serie",cancelLabel:"Volver",prompt:{label:"Motivo de la cancelación",placeholder:"Ej: el cliente cambió de horario",multiline:true}});
+            if(!reason)return;
             const response=await fetch("/api/admin/recurring-appointments",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:series.id,reason})});
             const data=await readJsonObject(response);if(!response.ok){setNotice(apiError(data,"No pudimos cancelar la serie"));return}
             await reloadRecurringModule();const count=typeof data.cancelledCount==="number"?data.cancelledCount:0;setNotice(`Serie cancelada · ${count} citas futuras`);setTimeout(()=>setNotice(""),2600);
@@ -292,26 +295,29 @@ export function AdminApp({ section, identity }: { section: string; identity: Adm
           }} onStatus={async(id,status)=>{
             const appointment=appointments.find((item)=>item.id===id);let reason="";
             if(status==="cancelada"&&appointment?.status!=="cancelada"){
-              const answer=window.prompt("Indica el motivo de la cancelación:","");
-              if(answer===null)return;
-              reason=answer.trim();if(!reason){setNotice("El motivo de cancelación es obligatorio");return}
+              const answer=await promptText({title:"Cancelar la cita",message:appointment?`Cita de ${appointment.clientName} · ${appointment.serviceName} · ${appointment.date} ${appointment.time}.`:undefined,destructive:true,confirmLabel:"Cancelar la cita",cancelLabel:"Volver",prompt:{label:"Motivo de la cancelación",placeholder:"Ej: el cliente avisó que no puede asistir",multiline:true}});
+              if(!answer)return;
+              reason=answer;
             }
             const response=await fetch("/api/admin/appointments",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id,status,reason})});
             const data=await readJsonObject(response); if(!response.ok){setNotice(apiError(data,"No pudimos actualizar la cita"));return}
             const cancellationReason=typeof data.cancellationReason==="string"?data.cancellationReason:"";
             setAppointments((items)=>items.map((item)=>item.id===id?{...item,status,cancellationReason}:item));setNotice(status==="cancelada"?"Cita cancelada con motivo registrado":"Estado actualizado");setTimeout(()=>setNotice(""),2200);
-          }} />}
+          }} />)}
         </div>
       </main>
       {modalOpen && catalog && <AppointmentModal catalog={catalog} onClose={() => setModalOpen(false)} onCreated={(appointment) => { setAppointments((old) => [...old, appointment]); setModalOpen(false); setNotice("Cita creada correctamente"); setTimeout(() => setNotice(""), 2500); }} />}
       {editingAppointment && catalog && <AppointmentEditModal key={editingAppointment.id} appointment={editingAppointment} catalog={catalog} onClose={()=>setEditingAppointment(null)} onSave={saveAppointment}/>}
       {(recurringModalOpen||editingSeries)&&catalog&&<RecurringSeriesModal key={editingSeries?.id??"new"} series={editingSeries} catalog={catalog} onClose={()=>{setRecurringModalOpen(false);setEditingSeries(null)}} onSaved={async(message)=>{await reloadRecurringModule();setRecurringModalOpen(false);setEditingSeries(null);setNotice(message);setTimeout(()=>setNotice(""),3000)}}/>}
       {notice && <div className="toast"><CheckCircle2 size={18} />{notice}</div>}
+      {commandOpen && <CommandPalette active={active} appointments={appointments} catalog={catalog} slug={identity.businessSlug} onClose={() => setCommandOpen(false)} onNewAppointment={canWriteAppointments && catalog ? () => { setCommandOpen(false); setModalOpen(true); } : undefined} />}
+      <CommandShortcut onOpen={() => setCommandOpen(true)} />
+      <DialogHost />
     </div>
   );
 }
 
-function Dashboard({ appointments, timezone, slug }: { appointments: Appointment[]; timezone: string; slug: string }) {
+function Dashboard({ appointments, timezone, slug, catalog }: { appointments: Appointment[]; timezone: string; slug: string; catalog: Catalog|null }) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const todayAppointments = appointments.filter((appointment) => appointment.date === today);
   const pendingToday = todayAppointments.filter((item) => !["completada", "cancelada", "no_asistio"].includes(item.status));
@@ -345,8 +351,10 @@ function Dashboard({ appointments, timezone, slug }: { appointments: Appointment
   const popular = Array.from(appointments.reduce((map, item) => map.set(item.serviceName, (map.get(item.serviceName) ?? 0) + 1), new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 3);
   const future = appointments.filter((item) => item.date >= today && !["cancelada", "no_asistio"].includes(item.status)).sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`));
   const ticket = todayAppointments.filter((item) => item.paidCents > 0).length;
+  const currency = catalog?.business.currency ?? "USD";
   return <>
     <div className="pole-line" aria-hidden="true" />
+    <Onboarding appointments={appointments} catalog={catalog} slug={slug} />
     <div className="shop-strip">
       <div><span>Piso abierto</span><h2>Hoy se atiende, se cobra y se cuadra.</h2></div>
       <div className="shop-actions">
@@ -358,13 +366,13 @@ function Dashboard({ appointments, timezone, slug }: { appointments: Appointment
     </div>
     <section className="metric-grid">
       <Metric icon={<CalendarDays />} tone="terracotta" label="Citas de hoy" value={String(todayAppointments.length)} trend={`${pendingToday.length} por atender`} />
-      <Metric icon={<CircleDollarSign />} tone="olive" label="Cobrado hoy" value={`$${(todayRevenue / 100).toFixed(2)}`} trend={ticket ? `Ticket medio $${(todayRevenue / Math.max(1, ticket) / 100).toFixed(2)}` : "Aún sin cobros"} />
+      <Metric icon={<CircleDollarSign />} tone="olive" label="Cobrado hoy" value={moneyCents(todayRevenue, currency)} trend={ticket ? `Ticket medio ${moneyCents(Math.round(todayRevenue / Math.max(1, ticket)), currency)}` : "Aún sin cobros"} />
       <Metric icon={<UsersRound />} tone="ink" label="En silla / cola" value={String(pendingToday.length)} trend="Estados reales de la agenda" />
       <Metric icon={<Clock3 />} tone="sand" label="Próximas" value={String(future.length)} trend="Sin canceladas ni no-show" />
     </section>
     <section className="dashboard-grid">
-      <div className="panel revenue-panel"><PanelTitle title="Ingresos de la semana" subtitle="Pagos y POS persistidos" /><div className="big-number">${((week?.gross ?? revenue.reduce((sum, value) => sum + value, 0)) / 100).toFixed(2)} <span><TrendingUp size={15} /> Últimos 7 días</span></div><div className="chart">
-        {revenue.map((value, index) => <div className="bar-wrap" key={days[index]} title={`$${(value / 100).toFixed(2)}`}><div className={`bar ${index === 6 ? "hot" : ""}`} style={{height:`${Math.max(5, (value / revenueMax) * 100)}%`}} /><span>{new Intl.DateTimeFormat("es-VE", { weekday: "narrow", timeZone: "UTC" }).format(new Date(`${days[index]}T12:00:00Z`))}</span></div>)}
+      <div className="panel revenue-panel"><PanelTitle title="Ingresos de la semana" subtitle="Pagos y POS persistidos" /><div className="big-number">{moneyCents(week?.gross ?? revenue.reduce((sum, value) => sum + value, 0), currency)} <span><TrendingUp size={15} /> Últimos 7 días</span></div><div className="chart">
+        {revenue.map((value, index) => <div className="bar-wrap" key={days[index]} title={moneyCents(value, currency)}><div className={`bar ${index === 6 ? "hot" : ""}`} style={{height:`${Math.max(5, (value / revenueMax) * 100)}%`}} /><span>{new Intl.DateTimeFormat("es-VE", { weekday: "narrow", timeZone: "UTC" }).format(new Date(`${days[index]}T12:00:00Z`))}</span></div>)}
       </div></div>
       <div className="panel"><PanelTitle title="En la silla ahora" subtitle={`${future.length} por atender`} />
         <div className="appointment-list">{future.length ? future.slice(0,5).map((a)=><AppointmentRow key={a.id} appointment={a} />) : <EmptyState text="La agenda de hoy está libre." />}</div>
@@ -376,6 +384,166 @@ function Dashboard({ appointments, timezone, slug }: { appointments: Appointment
       {appointments.length ? appointments.slice().sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)).slice(0,4).map((item) => <div className="activity" key={item.id}><span className={`activity-icon ${item.source === "online" ? "ok" : "neutral"}`}>{item.source === "online" ? <Sparkles /> : <UserRound />}</span><div><strong>{item.source === "online" ? "Reserva online" : "Cita desde el panel"}</strong><p>{item.clientName} · {item.serviceName}</p></div><time>{formatShortDate(item.date)}</time></div>) : <EmptyState text="Todavía no hay actividad." />}
     </div></section>
   </>;
+}
+
+/* Puesta en marcha: solo aparece mientras falte algo real por configurar. */
+const onboardingListeners = new Set<() => void>();
+function subscribeOnboarding(listener: () => void) { onboardingListeners.add(listener); return () => { onboardingListeners.delete(listener); }; }
+function readOnboarding() { try { return window.localStorage.getItem("corteza.onboarding") === "off"; } catch { return false; } }
+function hideOnboarding() { try { window.localStorage.setItem("corteza.onboarding", "off"); } catch { /* almacenamiento bloqueado */ } onboardingListeners.forEach((listener) => listener()); }
+
+function Onboarding({ appointments, catalog, slug }: { appointments: Appointment[]; catalog: Catalog|null; slug: string }) {
+  const dismissed = useSyncExternalStore(subscribeOnboarding, readOnboarding, () => true);
+  if (!catalog) return null;
+  const steps = [
+    { done: catalog.services.filter(serviceIsActive).length > 0, title: "Carga tus servicios", copy: "Corte, barba, combos: duración y precio reales.", href: "/servicios" },
+    { done: catalog.professionals.filter(professionalIsActive).length > 0, title: "Suma a tu equipo", copy: "Cada barbero con sus servicios y su silla.", href: "/equipo" },
+    { done: appointments.length > 0, title: "Registra la primera cita", copy: "Desde el panel o desde tu página de reservas.", href: "/citas" },
+    { done: appointments.some((item) => item.paidCents > 0), title: "Cobra y cuadra la caja", copy: "El primer cobro activa reportes y comisiones.", href: "/caja" },
+  ];
+  const completed = steps.filter((step) => step.done).length;
+  if (dismissed || completed === steps.length) return null;
+  return <section className="panel onboarding-panel">
+    <div className="panel-title">
+      <div><span className="eyebrow">Primeros pasos</span><h2>Deja la barbería lista para vender</h2><p>Cuatro pasos y el panel empieza a trabajar con datos reales.</p></div>
+      <button type="button" onClick={hideOnboarding}>Ocultar</button>
+    </div>
+    <div className="onboarding-progress"><div><i style={{ width: `${(completed / steps.length) * 100}%` }} /></div><span>{completed} de {steps.length}</span></div>
+    <div className="onboarding-steps">
+      {steps.map((step, index) => <div className={`onboarding-step ${step.done ? "done" : ""}`} key={step.title}>
+        <i>{step.done ? <CheckCircle2 size={14} /> : index + 1}</i>
+        <div><strong>{step.title}</strong><p>{step.copy}</p></div>
+        {!step.done && <Link className="secondary compact" href={step.href}>Ir</Link>}
+      </div>)}
+    </div>
+    <p style={{ marginTop: 14, fontSize: 13, color: "var(--muted)" }}>Tu página pública ya vive en /reservar/{slug}</p>
+  </section>;
+}
+
+/* Consumo real del plan. Si la cuenta no puede leer facturación, no se dibuja nada inventado. */
+function PlanMeter({ appointments, timezone }: { appointments: Appointment[]; timezone: string }) {
+  const [plan, setPlan] = useState<{ name:string; maxAppointments:number; status:string }|null>(null);
+  useEffect(() => {
+    fetch("/api/admin/billing", { credentials: "same-origin" }).then(async (response) => {
+      if (!response.ok) return;
+      const body = await readJsonObject(response);
+      const subscription = isJsonObject(body.subscription) ? body.subscription : null;
+      if (!subscription) return;
+      setPlan({
+        name: String(subscription.planName ?? "Plan actual"),
+        maxAppointments: Number(subscription.maxAppointments ?? 0),
+        status: String(subscription.status ?? "active"),
+      });
+    }).catch(() => undefined);
+  }, []);
+  const month = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(new Date());
+  const used = appointments.filter((item) => item.date.slice(0, 7) === month && !["cancelada", "no_asistio"].includes(item.status)).length;
+  const limit = plan?.maxAppointments && plan.maxAppointments > 0 ? plan.maxAppointments : 0;
+  const percent = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  return <div className="sidebar-footer">
+    <div className="plan-line"><span>{plan?.name ?? "Citas del mes"}</span><strong>{limit ? `${used}/${limit}` : used}</strong></div>
+    {limit > 0 && <div className="plan-progress"><i style={{ width: `${percent}%`, background: percent >= 90 ? "var(--pole)" : undefined }} /></div>}
+    <small>{limit ? `${Math.max(0, limit - used)} citas disponibles este mes` : `${used} citas activas este mes`}</small>
+    {limit > 0 && percent >= 80 && <Link className="plan-upgrade" href="/plan"><ArrowUpRight size={14} /> Ampliar plan</Link>}
+  </div>;
+}
+
+/* Esqueleto único de carga. */
+function ModuleSkeleton() {
+  return <>
+    <section className="metric-grid">{[0, 1, 2, 3].map((index) => <div className="skeleton skeleton-card" key={index} />)}</section>
+    <section className="panel"><div className="skeleton skeleton-title" /><div className="skeleton skeleton-text" style={{ width: "70%" }} /><div style={{ marginTop: 14 }}>{[0, 1, 2, 3, 4].map((index) => <div className="skeleton skeleton-row" key={index} />)}</div></section>
+  </>;
+}
+
+/* Atajo global de teclado para el buscador. */
+function CommandShortcut({ onOpen }: { onOpen: () => void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); onOpen(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onOpen]);
+  return null;
+}
+
+type CommandResult = { id:string; group:string; label:string; hint:string; href:string; icon:React.ReactNode };
+
+/* Buscador global: secciones, citas, clientes, servicios y equipo, sobre los datos ya cargados. */
+function CommandPalette({ active, appointments, catalog, slug, onClose, onNewAppointment }: {
+  active: string; appointments: Appointment[]; catalog: Catalog|null; slug: string;
+  onClose: () => void; onNewAppointment?: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [cursor, setCursor] = useState(0);
+  const term = query.trim().toLowerCase();
+  const matches = (value: string) => value.toLowerCase().includes(term);
+
+  const results: CommandResult[] = [];
+  if (!term && onNewAppointment) results.push({ id: "new", group: "Acciones", label: "Nueva cita", hint: "Abrir el formulario de reserva", href: "", icon: <Plus size={17} /> });
+  nav.forEach((group) => group.items.forEach(([itemSlug, label, Icon]) => {
+    if (term && !matches(label)) return;
+    if (itemSlug === active && term) return;
+    results.push({ id: `s-${itemSlug}`, group: "Ir a", label, hint: group.label, href: `/${itemSlug}`, icon: <Icon size={17} /> });
+  }));
+  if (term) {
+    const seenClients = new Set<string>();
+    appointments.forEach((item) => {
+      if (seenClients.size >= 6 || seenClients.has(item.clientId) || !(matches(item.clientName) || matches(item.phone) || matches(item.email))) return;
+      seenClients.add(item.clientId);
+      results.push({ id: `c-${item.clientId}`, group: "Clientes", label: item.clientName, hint: `${item.phone || item.email || "Sin contacto"} · última cita ${item.date}`, href: "/clientes", icon: <UsersRound size={17} /> });
+    });
+    appointments.filter((item) => matches(item.clientName) || matches(item.serviceName) || matches(item.professionalName)).slice(0, 5)
+      .forEach((item) => results.push({ id: `a-${item.id}`, group: "Citas", label: `${item.clientName} · ${item.serviceName}`, hint: `${item.date} ${item.time} · ${item.professionalName}`, href: "/citas", icon: <Clock3 size={17} /> }));
+    (catalog?.services ?? []).filter((item) => matches(item.name) || matches(item.category)).slice(0, 5)
+      .forEach((item) => results.push({ id: `sv-${item.id}`, group: "Servicios", label: item.name, hint: `${item.durationMinutes} min · ${moneyCents(item.priceCents, catalog?.business.currency)}`, href: "/servicios", icon: <ScissorsIcon size={17} /> }));
+    (catalog?.professionals ?? []).filter((item) => matches(item.name) || matches(item.specialty)).slice(0, 5)
+      .forEach((item) => results.push({ id: `p-${item.id}`, group: "Equipo", label: item.name, hint: item.specialty || "Profesional", href: "/equipo", icon: <UserRound size={17} /> }));
+    if (matches("reservas") || matches("link")) {
+      results.push({ id: "public", group: "Acciones", label: "Abrir la página de reservas", hint: `/reservar/${slug}`, href: `/reservar/${slug}`, icon: <Sparkles size={17} /> });
+    }
+  }
+
+  const visible = results.slice(0, 24);
+  const groups = Array.from(new Set(visible.map((item) => item.group)));
+  const choose = (item: CommandResult) => {
+    if (!item.href) { onNewAppointment?.(); return; }
+    onClose();
+    window.location.href = item.href;
+  };
+
+  return <div className="command-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="command-panel" role="dialog" aria-modal="true" aria-label="Buscar en el panel">
+      <div className="command-field">
+        <Search size={19} />
+        <input
+          autoFocus value={query} placeholder="Busca un cliente, una cita, un servicio o una sección..."
+          aria-label="Término de búsqueda"
+          onChange={(event) => { setQuery(event.target.value); setCursor(0); }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") { event.preventDefault(); onClose(); }
+            if (event.key === "ArrowDown") { event.preventDefault(); setCursor((value) => Math.min(visible.length - 1, value + 1)); }
+            if (event.key === "ArrowUp") { event.preventDefault(); setCursor((value) => Math.max(0, value - 1)); }
+            if (event.key === "Enter" && visible[cursor]) { event.preventDefault(); choose(visible[cursor]); }
+          }}
+        />
+        <button className="icon-button" onClick={onClose} aria-label="Cerrar buscador"><X size={17} /></button>
+      </div>
+      <div className="command-results">
+        {visible.length ? groups.map((group) => <div key={group}>
+          <p className="command-group eyebrow">{group}</p>
+          {visible.filter((item) => item.group === group).map((item) => <button
+            type="button" className="command-item" key={item.id}
+            data-selected={visible.indexOf(item) === cursor}
+            onMouseEnter={() => setCursor(visible.indexOf(item))}
+            onClick={() => choose(item)}
+          >{item.icon}<div><strong>{item.label}</strong><small>{item.hint}</small></div><CornerDownLeft size={14} /></button>)}
+        </div>) : <p className="command-empty">Nada coincide con esa búsqueda. Prueba con el nombre del cliente o del servicio.</p>}
+      </div>
+      <div className="command-foot"><span><kbd>Flechas</kbd> moverse</span><span><kbd>Enter</kbd> abrir</span><span><kbd>Esc</kbd> cerrar</span></div>
+    </div>
+  </div>;
 }
 
 function AlertsBell() {
@@ -430,7 +598,7 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function AppointmentRow({ appointment: a }: { appointment: Appointment }) {
-  return <div className="appointment-row"><time>{a.time}</time><div className="person-initial">{a.clientName.split(" ").map((n)=>n[0]).slice(0,2).join("")}</div><div><strong>{a.clientName}</strong><p>{a.serviceName} · {a.professionalName}</p></div><span className={`status ${a.status}`}>{a.status}</span><button className="ghost-icon" aria-label="Más opciones"><MoreHorizontal size={18}/></button></div>;
+  return <div className="appointment-row"><time>{a.time}</time><div className="person-initial">{a.clientName.split(" ").map((n)=>n[0]).slice(0,2).join("")}</div><div><strong>{a.clientName}</strong><p>{a.serviceName} · {a.professionalName}</p></div><span className={`status ${a.status}`}>{statusLabel(a.status)}</span><button className="ghost-icon" aria-label="Más opciones"><MoreHorizontal size={18}/></button></div>;
 }
 
 function ModuleView({ section, appointments, recurringSeries, catalog, identity, canWrite, onServicesChanged, onProfessionalsChanged, onClientUpdated, onPaymentChanged, onNew, onNewRecurring, onEditSeries, onCancelSeries, onEdit, onReschedule, onStatus }: { section: string; appointments: Appointment[]; recurringSeries:RecurringSeries[]; catalog: Catalog|null; identity:AdminIdentity; canWrite:boolean; onServicesChanged:(services:Service[])=>void; onProfessionalsChanged:(professionals:Professional[],changed?:Professional)=>void; onClientUpdated:(client:ClientRecord)=>void; onPaymentChanged:(appointmentId:string,paidCents:number,totalCents?:number)=>void; onNew: () => void; onNewRecurring:()=>void; onEditSeries:(series:RecurringSeries)=>void; onCancelSeries:(series:RecurringSeries)=>Promise<void>; onEdit:(appointment:Appointment)=>void; onReschedule:(appointment:Appointment,date:string,time:string)=>Promise<void>; onStatus:(id:string,status:string)=>Promise<void> }) {
@@ -616,7 +784,8 @@ function Clients({onClientUpdated}:{onClientUpdated:(client:ClientRecord)=>void}
 function ClientFormModal({client,onClose,onSaved,onDeleted}:{client:ClientRecord|null;onClose:()=>void;onSaved:(client:ClientRecord)=>void;onDeleted:(id:string)=>void}){
   const [saving,setSaving]=useState(false);const [error,setError]=useState("");
   const submit=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();setSaving(true);setError("");const payload=Object.fromEntries(new FormData(event.currentTarget).entries());try{const response=await fetch("/api/admin/clients",{method:client?"PUT":"POST",headers:{"content-type":"application/json"},body:JSON.stringify(client?{...payload,id:client.id}:payload)});const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos guardar el cliente"));if(!isClientRecord(data.client))throw new Error("El cliente guardado no es válido.");onSaved(data.client)}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos guardar el cliente");setSaving(false)}};
-  const remove=async()=>{if(!client||client.appointmentCount>0||!window.confirm(`¿Eliminar a ${client.name}? Esta acción no se puede deshacer.`))return;setSaving(true);setError("");try{const response=await fetch("/api/admin/clients",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:client.id})});const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos eliminar el cliente"));onDeleted(client.id)}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos eliminar el cliente");setSaving(false)}};
+  const remove=async()=>{if(!client||client.appointmentCount>0)return;
+    if(!await confirmAction({title:`¿Eliminar a ${client.name}?`,message:"El cliente desaparece del directorio y no se puede recuperar.",destructive:true,confirmLabel:"Eliminar cliente"}))return;setSaving(true);setError("");try{const response=await fetch("/api/admin/clients",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:client.id})});const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos eliminar el cliente"));onDeleted(client.id)}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos eliminar el cliente");setSaving(false)}};
   return <div className="modal-backdrop" onMouseDown={(event)=>{if(event.target===event.currentTarget)onClose()}}><div className="modal client-modal" role="dialog" aria-modal="true" aria-labelledby="client-form-title"><div className="modal-head"><div><span className="eyebrow">Directorio real</span><h2 id="client-form-title">{client?"Editar cliente":"Nuevo cliente"}</h2></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></div><form onSubmit={submit}><div className="form-grid"><label className="wide">Nombre completo<input name="name" required minLength={2} maxLength={100} autoComplete="name" defaultValue={client?.name??""}/></label><label>Correo electrónico<input name="email" type="email" required maxLength={254} autoComplete="email" defaultValue={client?.email??""}/></label><label>Teléfono<input name="phone" required maxLength={25} autoComplete="tel" placeholder="+58 412 000 0000" defaultValue={client?.phone??""}/></label><label className="wide">Notas<textarea name="notes" maxLength={1000} defaultValue={client?.notes??""} placeholder="Preferencias, alergias u observaciones..."/></label></div>{error&&<p className="form-error" role="alert">{error}</p>}{client&&client.appointmentCount>0&&<p className="client-delete-note">Este cliente tiene historial y no puede eliminarse; sus datos sí pueden actualizarse.</p>}<div className="modal-actions split">{client&&client.appointmentCount===0?<button type="button" className="danger-button" disabled={saving} onClick={()=>void remove()}><Trash2 size={15}/> Eliminar</button>:<span/>}<div><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving}>{saving?"Guardando...":"Guardar cliente"}</button></div></div></form></div></div>;
 }
 
@@ -688,7 +857,8 @@ function Services({initialServices,onCatalogChanged}:{initialServices:Service[];
 function ServiceFormModal({service,onClose,onSaved,onDeleted}:{service:ManagedService|null;onClose:()=>void;onSaved:(service:ManagedService)=>void;onDeleted:(id:string)=>void}){
   const [saving,setSaving]=useState(false);const [error,setError]=useState("");
   const submit=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();setSaving(true);setError("");const form=new FormData(event.currentTarget);const payload={name:form.get("name"),category:form.get("category"),durationMinutes:form.get("durationMinutes"),price:form.get("price"),active:form.get("active")==="on"};try{const response=await fetch("/api/admin/services",{method:service?"PUT":"POST",headers:{"content-type":"application/json"},body:JSON.stringify(service?{...payload,id:service.id}:payload)});const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos guardar el servicio"));if(!isManagedService(data.service))throw new Error("El servicio guardado no es válido.");onSaved(data.service)}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos guardar el servicio");setSaving(false)}};
-  const remove=async()=>{if(!service||service.appointmentCount>0||!window.confirm(`¿Eliminar ${service.name}? Esta acción no se puede deshacer.`))return;setSaving(true);setError("");try{const response=await fetch("/api/admin/services",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:service.id})});const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos eliminar el servicio"));onDeleted(service.id)}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos eliminar el servicio");setSaving(false)}};
+  const remove=async()=>{if(!service||service.appointmentCount>0)return;
+    if(!await confirmAction({title:`¿Eliminar ${service.name}?`,message:"El servicio sale del catálogo y de la página pública de reservas.",destructive:true,confirmLabel:"Eliminar servicio"}))return;setSaving(true);setError("");try{const response=await fetch("/api/admin/services",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:service.id})});const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos eliminar el servicio"));onDeleted(service.id)}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos eliminar el servicio");setSaving(false)}};
   return <div className="modal-backdrop" onMouseDown={(event)=>{if(event.target===event.currentTarget)onClose()}}><div className="modal service-modal" role="dialog" aria-modal="true" aria-labelledby="service-form-title"><div className="modal-head"><div><span className="eyebrow">Catálogo real</span><h2 id="service-form-title">{service?"Editar servicio":"Nuevo servicio"}</h2></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></div><form onSubmit={submit}><div className="form-grid"><label className="wide">Nombre<input name="name" required minLength={2} maxLength={100} defaultValue={service?.name??""} placeholder="Ej. Corte clásico"/></label><label>Categoría<input name="category" required minLength={2} maxLength={60} defaultValue={service?.category??""} placeholder="Cortes"/></label><label>Duración (minutos)<input name="durationMinutes" type="number" required min={5} max={480} step={5} defaultValue={service?.durationMinutes??30}/></label><label>Precio<input name="price" type="number" required min={0} max={1000000} step="0.01" defaultValue={service?(service.priceCents/100).toFixed(2):""} placeholder="0.00"/></label><label className="checkbox-field"><input name="active" type="checkbox" defaultChecked={service?serviceIsActive(service):true}/><span><b>Servicio activo</b><small>Visible en la reserva pública y disponible para nuevas citas.</small></span></label></div>{error&&<p className="form-error" role="alert">{error}</p>}{service&&service.appointmentCount>0&&<p className="client-delete-note">Este servicio tiene citas y no puede eliminarse; puedes desactivarlo para impedir nuevas reservas.</p>}<div className="modal-actions split">{service&&service.appointmentCount===0?<button type="button" className="danger-button" disabled={saving} onClick={()=>void remove()}><Trash2 size={15}/> Eliminar</button>:<span/>}<div><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving}>{saving?"Guardando...":"Guardar servicio"}</button></div></div></form></div></div>;
 }
 
@@ -758,7 +928,8 @@ function ProfessionalFormModal({professional,services,onClose,onSaved,onDeleted}
   const [saving,setSaving]=useState(false);const [error,setError]=useState("");
   const submit=async(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();setSaving(true);setError("");const form=new FormData(event.currentTarget);const payload={name:form.get("name"),specialty:form.get("specialty"),email:form.get("email"),phone:form.get("phone"),active:form.get("active")==="on",serviceIds:form.getAll("serviceIds")};try{const response=await fetch("/api/admin/professionals",{method:professional?"PUT":"POST",headers:{"content-type":"application/json"},body:JSON.stringify(professional?{...payload,id:professional.id}:payload)});const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos guardar el profesional"));if(!isManagedProfessional(data.professional))throw new Error("El profesional guardado no es válido.");onSaved(data.professional)}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos guardar el profesional");setSaving(false)}};
   const hasDependencies=Boolean(professional&&(professional.appointmentCount>0||professional.blockCount>0));
-  const remove=async()=>{if(!professional||hasDependencies||!window.confirm(`¿Eliminar a ${professional.name}? Esta acción no se puede deshacer.`))return;setSaving(true);setError("");try{const response=await fetch("/api/admin/professionals",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:professional.id})});const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos eliminar el profesional"));onDeleted(professional.id)}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos eliminar el profesional");setSaving(false)}};
+  const remove=async()=>{if(!professional||hasDependencies)return;
+    if(!await confirmAction({title:`¿Eliminar a ${professional.name}?`,message:"Se retira del equipo, de la agenda y de la página pública de reservas.",destructive:true,confirmLabel:"Eliminar del equipo"}))return;setSaving(true);setError("");try{const response=await fetch("/api/admin/professionals",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:professional.id})});const data=await readJsonObject(response);if(!response.ok)throw new Error(apiError(data,"No pudimos eliminar el profesional"));onDeleted(professional.id)}catch(reason){setError(reason instanceof Error?reason.message:"No pudimos eliminar el profesional");setSaving(false)}};
   return <div className="modal-backdrop" onMouseDown={(event)=>{if(event.target===event.currentTarget)onClose()}}><div className="modal professional-modal" role="dialog" aria-modal="true" aria-labelledby="professional-form-title"><div className="modal-head"><div><span className="eyebrow">Equipo real</span><h2 id="professional-form-title">{professional?"Editar profesional":"Nuevo profesional"}</h2></div><button className="icon-button" onClick={onClose} aria-label="Cerrar"><X/></button></div><form onSubmit={submit}><div className="form-grid"><label className="wide">Nombre completo<input name="name" required minLength={2} maxLength={100} autoComplete="name" defaultValue={professional?.name??""} placeholder="Ej. Andrea Silva"/></label><label className="wide">Especialidad<input name="specialty" required minLength={2} maxLength={120} defaultValue={professional?.specialty??""} placeholder="Fades, barba y clásicos"/></label><label>Correo electrónico<input name="email" type="email" maxLength={254} autoComplete="email" defaultValue={professional?.email??""}/></label><label>Teléfono<input name="phone" maxLength={25} autoComplete="tel" defaultValue={professional?.phone??""} placeholder="+58 412 000 0000"/></label><fieldset className="wide professional-service-picker"><legend>Servicios que ofrece</legend>{services.map((service)=><label key={service.id}><input name="serviceIds" type="checkbox" value={service.id} defaultChecked={professional?professional.serviceIds.includes(service.id):true}/><span><b>{service.name}</b><small>{service.durationMinutes} min · ${(service.priceCents/100).toFixed(2)}</small></span></label>)}{!services.length&&<p>No hay servicios activos para asignar.</p>}</fieldset><label className="checkbox-field"><input name="active" type="checkbox" defaultChecked={professional?professionalIsActive(professional):true}/><span><b>Profesional activo</b><small>Visible en la reserva pública y disponible para nuevas citas.</small></span></label></div>{error&&<p className="form-error" role="alert">{error}</p>}{hasDependencies&&<p className="client-delete-note">Este profesional tiene historial o bloqueos y no puede eliminarse; puedes desactivarlo para impedir nuevas reservas.</p>}<div className="modal-actions split">{professional&&!hasDependencies?<button type="button" className="danger-button" disabled={saving} onClick={()=>void remove()}><Trash2 size={15}/> Eliminar</button>:<span/>}<div><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving}>{saving?"Guardando...":"Guardar profesional"}</button></div></div></form></div></div>;
 }
 
@@ -813,7 +984,7 @@ function Schedules({professionals,timezone}:{professionals:Professional[];timezo
     }catch(reason){setError(reason instanceof Error?reason.message:"No pudimos crear el bloqueo")}finally{setSaving(false)}
   };
   const remove=async(block:TimeBlock)=>{
-    if(!window.confirm(`¿Eliminar el bloqueo del ${formatShortDate(block.date)} a las ${block.startTime}?`))return;
+    if(!await confirmAction({title:"¿Eliminar este bloqueo?",message:`${formatShortDate(block.date)} a las ${block.startTime}. El horario vuelve a quedar disponible para reservas.`,destructive:true,confirmLabel:"Eliminar bloqueo"}))return;
     setError("");setMessage("");
     try{
       const response=await fetch("/api/admin/time-blocks",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id:block.id})});
@@ -840,14 +1011,8 @@ function FeatureSection({section}:{section:string}){
   if (section === "usuarios") return <MembersPanel/>;
   if (section === "seguridad") return <><SecurityCenter/><BackupLink/></>;
   if (section === "plan") return <BillingPanel/>;
-  const content:Record<string,[string,string,string[]]>= {
-    estaciones:["Estaciones y recursos","Evita reservas dobles cuando compartes sillas o equipos",["Silla principal","Lavacabezas","Sala privada"]],
-    marketing:["Automatiza tu comunicación","Confirma citas, recupera clientes y lanza promociones",["Recordatorio 24 horas antes","Confirmación por WhatsApp","Campaña de clientes inactivos"]],
-    fidelizacion:["Programa de puntos","Premia a quienes vuelven y aumenta la recurrencia",["1 punto por cada $1","20 puntos de bienvenida","Recompensa a los 100 puntos"]],
-    configuracion:["Preferencias del negocio","Todo lo que necesita tu operación diaria",["Datos e identidad","Reservas y cancelaciones","Pagos y facturación","WhatsApp e imágenes"]],
-  };
-  const [h,p,items]=content[section]??["Módulo","Configuración disponible",[]];
-  return <div className="feature-layout"><div className="feature-hero"><span className="eyebrow">Configuración</span><h2>{h}</h2><p>{p}</p></div><div className="panel option-list">{items.map((x,i)=><div className="option-row" key={x}><span>{i+1}</span><strong>{x}</strong><ArrowUpRight/></div>)}</div></div>
+  const [h, p] = titles[section] ?? ["Módulo", "Configuración disponible"];
+  return <div className="feature-layout"><div className="empty-state"><Settings size={26} /><strong>{h} todavía no está disponible</strong><span>{p}. Esta sección se activará en una próxima entrega; mientras tanto el resto del panel funciona con datos reales.</span></div></div>;
 }
 
 type Member = { id:string; email:string; displayName:string; role:string; status:string; createdAt:string; lastSeenAt:string|null };
@@ -867,11 +1032,12 @@ function MembersPanel(){
   const load=()=>fetch("/api/admin/members").then(async r=>{const data=await readJsonObject(r);if(!r.ok)throw new Error(apiError(data,"No se pudo cargar el equipo"));const nextMembers=Array.isArray(data.members)?data.members.filter(isMember):[];setMembers(nextMembers)}).catch(err=>setError(err instanceof Error?err.message:"No se pudo cargar el equipo"));
   useEffect(()=>{void load()},[]);
   const invite=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();setError("");const form=new FormData(e.currentTarget);const r=await fetch("/api/admin/members",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(Object.fromEntries(form.entries()))});const data=await readJsonObject(r);if(!r.ok){setError(apiError(data,"No se pudo crear el acceso"));return}e.currentTarget.reset();setNotice("Acceso creado. Comparte la contraseña temporal de forma privada.");void load()};
-  return <div className="security-layout"><section className="panel security-card"><PanelTitle title="Equipo con acceso" subtitle="Principio de mínimo privilegio"/>{members.map(member=><div className="member-row" key={member.id}><div className="person-initial">{initials(member.displayName||member.email)}</div><div><strong>{member.displayName||member.email}</strong><p>{member.email}</p></div><span className={`status ${member.status==="active"?"confirmada":"programada"}`}>{member.status}</span><b>{roleLabel(member.role)}</b></div>)}{!members.length&&!error&&<EmptyState text="No hay miembros para mostrar."/>}</section><section className="panel security-card"><PanelTitle title="Crear acceso" subtitle="Credenciales propias de Corteza"/><form className="invite-form" onSubmit={invite}><label>Nombre<input name="displayName" maxLength={100} required placeholder="Nombre del miembro"/></label><label>Email<input name="email" type="email" required maxLength={254} placeholder="persona@empresa.com"/></label><label>Contraseña temporal<input name="password" type="password" required minLength={10} maxLength={128} autoComplete="new-password" placeholder="Mínimo 10 caracteres"/></label><label>Rol<select name="role" defaultValue="reception"><option value="reception">Recepción</option><option value="professional">Profesional</option><option value="admin">Administrador</option></select></label>{error&&<p className="form-error">{error}</p>}{notice&&<p className="form-success">{notice}</p>}<button className="primary">Crear acceso seguro</button></form></section></div>
+  return <div className="security-layout"><section className="panel security-card"><PanelTitle title="Equipo con acceso" subtitle="Principio de mínimo privilegio"/>{members.map(member=><div className="member-row" key={member.id}><div className="person-initial">{initials(member.displayName||member.email)}</div><div><strong>{member.displayName||member.email}</strong><p>{member.email}</p></div><span className={`status ${member.status==="active"?"confirmada":"programada"}`}>{memberStatusLabel(member.status)}</span><b>{roleLabel(member.role)}</b></div>)}{!members.length&&!error&&<EmptyState text="No hay miembros para mostrar."/>}</section><section className="panel security-card"><PanelTitle title="Crear acceso" subtitle="Credenciales propias de Corteza"/><form className="invite-form" onSubmit={invite}><label>Nombre<input name="displayName" maxLength={100} required placeholder="Nombre del miembro"/></label><label>Email<input name="email" type="email" required maxLength={254} placeholder="persona@empresa.com"/></label><label>Contraseña temporal<input name="password" type="password" required minLength={10} maxLength={128} autoComplete="new-password" placeholder="Mínimo 10 caracteres"/></label><label>Rol<select name="role" defaultValue="reception"><option value="reception">Recepción</option><option value="professional">Profesional</option><option value="admin">Administrador</option></select></label>{error&&<p className="form-error">{error}</p>}{notice&&<p className="form-success">{notice}</p>}<button className="primary">Crear acceso seguro</button></form></section></div>
 }
 
+function memberStatusLabel(value:string){return ({active:"Activo",pending:"Pendiente",suspended:"Suspendido"} as Record<string,string>)[value]??value}
 function roleLabel(role:string){return ({owner:"Propietario",admin:"Administrador",reception:"Recepción",professional:"Profesional"} as Record<string,string>)[role]??role}
-function moneyCents(cents:number){return new Intl.NumberFormat("es-VE",{style:"currency",currency:"USD"}).format(cents/100)}
+function moneyCents(cents:number,currency="USD"){try{return new Intl.NumberFormat("es-VE",{style:"currency",currency}).format(cents/100)}catch{return new Intl.NumberFormat("es-VE",{style:"currency",currency:"USD"}).format(cents/100)}}
 
 function isMember(value:unknown):value is Member{return isJsonObject(value)&&typeof value.id==="string"&&typeof value.email==="string"&&typeof value.displayName==="string"&&typeof value.role==="string"&&typeof value.status==="string"&&typeof value.createdAt==="string"&&(typeof value.lastSeenAt==="string"||value.lastSeenAt===null)}
 

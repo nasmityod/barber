@@ -25,7 +25,7 @@ function barberAccent(value: string) {
 
 export async function getPublicCatalog(db: D1Database, slug: string): Promise<PublicCatalog | null> {
   const business = await db.prepare(`SELECT business.id, business.name, business.slug, business.timezone, business.currency,
-      COALESCE(settings.time_format, '24h') AS timeFormat,
+      COALESCE(settings.time_format, '12h') AS timeFormat,
       COALESCE(settings.business_phone, '') AS businessPhone, COALESCE(settings.business_email, '') AS businessEmail,
       COALESCE(settings.address, '') AS address, COALESCE(settings.whatsapp_number, '') AS whatsappNumber,
       COALESCE(settings.logo_url, '') AS logoUrl, COALESCE(settings.cover_image_url, '') AS coverImageUrl,
@@ -67,7 +67,7 @@ export async function getPublicCatalog(db: D1Database, slug: string): Promise<Pu
   const toBoolean = (value: unknown) => value === 1;
   return {
     business: {
-      name: String(business.name ?? ""), slug: String(business.slug ?? ""), timezone: String(business.timezone ?? "UTC"),
+      name: String(business.name ?? ""), slug: String(business.slug ?? ""), timezone: String(business.timezone ?? "America/Caracas"),
       currency: String(business.currency ?? "USD"), timeFormat: String(business.timeFormat ?? "24h"),
       businessPhone: String(business.businessPhone ?? ""), businessEmail: String(business.businessEmail ?? ""),
       address: String(business.address ?? ""), whatsappNumber: String(business.whatsappNumber ?? ""),

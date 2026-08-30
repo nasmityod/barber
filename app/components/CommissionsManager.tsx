@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CircleDollarSign, Edit3, PauseCircle, PlayCircle, RefreshCw } from "lucide-react";
 import { apiError, isJsonObject, readJsonObject } from "./api-json";
+import { promptText } from "./dialogs";
 
 type Filters = { from:string; to:string; professionalId:string; status:string };
 type CommissionData = {
@@ -21,7 +22,7 @@ export function CommissionsManager() {
   const pending=useMemo(()=>data?.commissions.filter((item)=>item.status==="pending")??[],[data]);
   const toggleSelected=(id:string)=>setSelected((items)=>items.includes(id)?items.filter((item)=>item!==id):[...items,id]);
   const submitFilters=(event:React.FormEvent<HTMLFormElement>)=>{event.preventDefault();const form=new FormData(event.currentTarget);const next={from:String(form.get("from")??""),to:String(form.get("to")??""),professionalId:String(form.get("professionalId")??""),status:String(form.get("status")??"all")};setFilters(next);setLoading(true);setError("");void load(next)};
-  const paySelected=async()=>{if(!selected.length)return;const name=window.prompt("Nombre del lote de pago",`Lote ${new Date().toISOString().slice(0,10)}`);if(name===null)return;try{await request({action:"batch_pay",commissionIds:selected,batchName:name});setNotice("Lote pagado y comisiones actualizadas.")}catch{/* the request error is already visible */}};
+  const paySelected=async()=>{if(!selected.length)return;const name=await promptText({title:"Liquidar comisiones seleccionadas",message:`Se marcarán como pagadas ${selected.length} comisiones y quedarán registradas en un lote.`,confirmLabel:"Pagar lote",prompt:{label:"Nombre del lote",defaultValue:`Lote ${new Date().toISOString().slice(0,10)}`,maxLength:80}});if(!name)return;try{await request({action:"batch_pay",commissionIds:selected,batchName:name});setNotice("Lote pagado y comisiones actualizadas.")}catch{/* the request error is already visible */}};
   return <div className="commissions-stack">
     {error&&<p className="form-error" role="alert">{error}</p>}{notice&&<p className="form-success">{notice}</p>}
     <form className="panel commissions-filters" onSubmit={submitFilters}><div><span className="eyebrow">Nómina variable</span><h2>Comisiones</h2><p>Se generan una sola vez cuando la cita está completada y cobrada.</p></div><div className="commissions-filter-grid"><label>Desde<input name="from" type="date" defaultValue={filters.from} required/></label><label>Hasta<input name="to" type="date" defaultValue={filters.to} required/></label><label>Profesional<select name="professionalId" defaultValue={filters.professionalId}><option value="">Todos</option>{data?.catalogs.professionals.map((item)=><option key={String(item.id)} value={String(item.id)}>{String(item.name)}</option>)}</select></label><label>Estado<select name="status" defaultValue={filters.status}><option value="all">Todos</option><option value="pending">Pendientes</option><option value="paid">Pagadas</option></select></label><button className="primary" disabled={loading}><RefreshCw size={15}/>{loading?"Actualizando...":"Aplicar filtros"}</button></div></form>

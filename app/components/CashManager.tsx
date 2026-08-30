@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CircleDollarSign, Clock3, Download, Printer, ReceiptText, Trash2, WalletCards, X } from "lucide-react";
 import { apiError, isJsonObject, readJsonObject } from "./api-json";
+import { promptText } from "./dialogs";
 
 export type CashAppointment = {
   id:string; date:string; time:string; status:string; totalCents:number; paidCents:number;
@@ -153,7 +154,8 @@ export function CashManager({appointments,onPaymentChanged}:{appointments:CashAp
     }catch(reason){setError(reason instanceof Error?reason.message:"No pudimos cerrar la caja");throw reason}
   };
   const voidPayment=async(payment:PaymentRecord)=>{
-    const reason=window.prompt("Indica el motivo de la anulación:","")?.trim();if(!reason)return;
+    const reason=await promptText({title:"Anular este cobro",message:"El cobro queda registrado como anulado y vuelve a contar como pendiente en la cita.",destructive:true,confirmLabel:"Anular cobro",prompt:{label:"Motivo de la anulación",placeholder:"Ej: se cobró el monto equivocado",multiline:true}});
+    if(!reason)return;
     try{
       const body=await request("PATCH",{action:"void",paymentId:payment.id,reason});
       if(typeof body.appointmentId==="string"&&typeof body.paidCents==="number")onPaymentChanged(body.appointmentId,body.paidCents);

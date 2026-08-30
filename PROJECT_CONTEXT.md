@@ -1509,3 +1509,249 @@ Pendientes P1 que continúan:
 - Mensajería externa con proveedor (WhatsApp/email). El cron ya encola recordatorios.
 - Almacenamiento gestionado de imágenes (R2) y pagos online con webhooks/conciliación.
 - Sucursales, planes con facturación real y E2E de navegador.
+
+---
+
+## 18. Rediseño premium 2026 — auditoría visual, benchmark y plan de ejecución
+
+> Sección escrita el 30 de agosto de 2026. Reemplaza la dirección visual de la sección 11 y define el sistema de diseño definitivo de Corteza. Léase junto a `.claude/skills/corteza-design/SKILL.md`, que es la versión operativa (reglas duras) de todo lo que aquí se argumenta.
+
+### 18.1 Alcance de la auditoría
+
+Se revisó el repositorio completo, no la app desplegada: `app/globals.css` (146 KB, 533 líneas), `app/layout.tsx`, `app/[section]/page.tsx`, `app/login/page.tsx`, los 18 componentes de `app/components/`, las 26 rutas de `app/api/`, `db/schema.ts` y `tests/rendered-html.test.mjs`. Se extrajeron las **~350 clases CSS distintas** que hoy usa el TSX y se agruparon por función para medir la duplicación real.
+
+### 18.2 Inventario real de la aplicación
+
+**Superficies:**
+
+| Superficie | Ruta | Componente |
+|---|---|---|
+| Panel administrativo | `/[section]` | `AdminApp.tsx` (933 líneas) |
+| Reserva pública | `/reservar/[slug]` | `BookingApp.tsx` (359 líneas) |
+| Portal del cliente | `/cita/[token]` | `ClientPortal.tsx` |
+| Pago público | `/pago/[token]` | `PublicPaymentForm.tsx` |
+| Acceso | `/login`, `/registro`, `/recuperar-clave`, `/restablecer-clave`, `/cambiar-clave` | formularios sueltos |
+| Legales | `/terminos`, `/privacidad` | páginas estáticas |
+
+**23 secciones del panel** en 4 grupos de navegación: Principal (inicio, turno, agenda, citas, clientes, caja), Gestión (servicios, equipo, horarios, estaciones), Crecimiento (reportes, comisiones, marketing, promociones, fidelización, reseñas, galería, lista de espera, pagos), Sistema (configuración, usuarios, seguridad, plan).
+
+**26 endpoints administrativos y públicos** con sesión propia, permisos por rol, auditoría, rate limiting y aislamiento por `business_id`. El backend está mucho más maduro que la capa visual: casi todo lo que se ve tiene datos reales detrás.
+
+### 18.3 Diagnóstico: por qué hoy no se siente consistente ni premium
+
+Esto no es una opinión estética, es lo que muestra el conteo de clases. El CSS creció por **acumulación por módulo**, no por sistema: cada vez que se agregó un módulo se escribió un bloque nuevo al final del archivo, con nombres propios, en lugar de reutilizar una primitiva.
+
+**1. Diez barras de herramientas que hacen lo mismo y se ven distinto.**
+`services-toolbar`, `team-toolbar`, `resources-toolbar`, `agenda-toolbar`, `day-shift-toolbar`, `table-tools`, `reports-filters`, `commissions-filters`, `commerce-tabs`, `growth-tabs`. Todas son "buscador + filtros + acción primaria". Cada una tiene su propio alto, su propio gap y su propio orden. Es la causa número uno de que Servicios y Equipo se sientan páginas de productos diferentes.
+
+**2. Tres sistemas de pestañas distintos.** `.segmented` (agenda), `.commerce-tabs` (caja/POS) y `.growth-tabs` (marketing). Mismo trabajo, tres lenguajes visuales.
+
+**3. Cuatro maneras de dibujar una tabla.** `.data-table`, `.table-panel`, `.inventory-table`, `.reports-table`, más listas hechas a mano con `div` (`client-list`, `commission-list`, `receipt-list`, `member-row`). Los pesos de encabezado, la altura de fila y el tratamiento del hover no coinciden.
+
+**4. Cada módulo dibuja su propia cabecera.** El shell ya renderiza `page-heading` con eyebrow, título, subtítulo y acciones — y aun así `feature-hero`, `security-summary`, `plan-summary`, `cash-close-hero`, `section-intro` y `shop-strip` vuelven a pintar una cabecera con otro tratamiento. El usuario ve dos jerarquías compitiendo en la misma pantalla.
+
+**5. La tipografía es la del molde.** Playfair Display + oro + negro es exactamente la combinación de las plantillas de barbería. Playfair en titulares de panel además arrastra el aire "blog editorial" que el proyecto quiere evitar. La identidad no puede apoyarse en la fuente más usada del nicho.
+
+**6. Diálogos nativos del navegador en flujos de dinero.** Hay 9 `window.prompt` / `window.confirm`: motivo de cancelación de cita, cancelación de series recurrentes, anulación de cobros, nombre de lote de comisiones y cuatro borrados. Un diálogo nativo de Chrome rompe cualquier promesa de producto premium, y aparece justo en los momentos de mayor riesgo.
+
+**7. Estado de carga único y pobre.** Solo existe `.loading-line`. No hay esqueletos; los módulos saltan de vacío a lleno.
+
+**8. Elementos decorativos que no funcionan.** El buscador del topbar es un `input` sin handler. La barra de plan del sidebar calcula `citas * 2` como porcentaje: es un dato inventado dentro de un panel que presume de datos reales.
+
+**9. Moneda inconsistente.** `moneyCents()` en `AdminApp.tsx:874` fija `currency: "USD"` ignorando `catalog.business.currency`, mientras `BookingApp` y `CashManager` sí lo respetan. Para vender en Venezuela, donde conviven USD y VES, esto es un defecto funcional, no cosmético.
+
+**10. Contenido de demostración vivo.** `FeatureSection` todavía guarda textos falsos para `estaciones`, `marketing`, `fidelizacion` y `configuracion`, secciones que ya tienen módulos reales.
+
+### 18.4 Benchmark: qué toman las plataformas que sí se ven caras
+
+Revisión de Mangomint, Boulevard, Fresha, Booksy, SQUIRE y Zenoti (fuentes al final de la sección).
+
+| Plataforma | Lo que hace bien | Qué adoptamos |
+|---|---|---|
+| **Mangomint** | Es la referencia de diseño del sector: interfaz rápida, reportes legibles, métricas clave sin menús anidados | Densidad de datos alta pero respirada; KPIs siempre visibles; una sola tabla para todo |
+| **Boulevard** | Checkout, membresías y automatización de nivel enterprise | Flujo de cobro como pantalla de primera clase, no como modal escondido |
+| **Fresha** | Puesta en marcha ligera para negocios pequeños | Checklist de configuración inicial; el negocio debe poder vender el primer día |
+| **Booksy** | Marketplace y captación | La página pública de reservas como pieza de marketing, no como formulario |
+| **SQUIRE** | Hecho para barberías: walk-ins, pagos divididos, depósitos | Turno del día y walk-ins como módulo central; ya lo tenemos, hay que darle jerarquía visual |
+| **Zenoti** | Multi-sucursal y operación grande | Tokens preparados para sucursales sin rehacer el sistema |
+
+**Conclusión del benchmark:** ninguna de las que se perciben caras usa gradientes, neón ni serif decorativa. Todas ganan con lo mismo: **una sola tabla, una sola tarjeta, un solo botón, jerarquía tipográfica fuerte y números en cifras tabulares.** El lujo aquí es la disciplina, no la decoración.
+
+### 18.5 Dirección visual definitiva — "Acero y latón"
+
+Referencias materiales: acero de la tijera, cuero del sillón, latón de la caja registradora, porcelana del lavacabezas. No oro brillante, no neón, no gradientes de plantilla.
+
+**Decisión estructural: la acción primaria es negro tinta, no dorada.** El oro sobre blanco no alcanza contraste de texto accesible y, saturado, es exactamente lo que abarata las plantillas del nicho. El latón queda reservado para la firma: rail activo del sidebar, anillo de foco, filete bajo los eyebrows, serie principal de las gráficas y la marca. Aparece poco; por eso se nota.
+
+**Decisión tipográfica: se elimina Playfair Display.** Sistema de una sola familia — **Geist** para todo el texto y **Geist Mono** para cifras, horas, dinero y micro-etiquetas en versalitas. La jerarquía la construyen escala, peso y tracking negativo, no una serif decorativa. Menos peticiones de fuente, cero olor a plantilla, y el panel deja de parecerse a un blog.
+
+**Tokens de color (claro):**
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--ink-900` | `#0B0B0C` | Sidebar, botón primario, titulares |
+| `--ink-800` | `#141416` | Superficie elevada dentro del sidebar |
+| `--ink-700` | `#26262A` | Bordes sobre oscuro |
+| `--ink` | `#101014` | Texto principal |
+| `--muted` | `#6B6B75` | Texto secundario |
+| `--faint` | `#9A9AA4` | Texto terciario, placeholders |
+| `--paper` | `#F4F4F6` | Fondo de trabajo |
+| `--surface` | `#FFFFFF` | Tarjetas y paneles |
+| `--surface-sunken` | `#FAFAFB` | Encabezados de tabla, zonas inertes |
+| `--line` | `#E7E7EB` | Filete estándar |
+| `--line-strong` | `#D6D6DC` | Separador de sección |
+| `--brass` | `#B8862F` | Firma de marca, rail activo, foco |
+| `--brass-soft` | `#F3EADA` | Fondo de estado activo |
+| `--pole` | `#B22B38` | Destructivo, no-show, alerta |
+| `--jade` | `#1B6B4B` | Pagado, completado, positivo |
+| `--amber` | `#9A6B12` | Pendiente, advertencia |
+| `--info` | `#2C4C8C` | Informativo, reserva online |
+
+**Radios:** 4 (chip) / 8 (input, botón) / 12 (panel, tarjeta) / 999 (avatar, pill). Nada de 24px: la tarjeta-globo es marca de plantilla generada.
+
+**Elevación:** filete de 1px primero, sombra después. Dos niveles: `--shadow-sm` para tarjetas, `--shadow-lg` para modales y popovers. Sombras grandes, muy transparentes y con tinte tibio; nunca negro puro al 30%.
+
+**Escala tipográfica:** 11 (mono etiqueta) / 13 (auxiliar) / 15 (cuerpo, base del panel) / 17 (subtítulo) / 20 (título de panel) / 28 (métrica) / 34 (título de página) / 46 (héroe público). Tracking `-0.02em` de 20px hacia arriba, `+0.14em` en versalitas mono.
+
+**Espaciado:** escala 4-8-12-16-20-24-32-48. Padding de panel 20px móvil / 24px escritorio. Altura de control 44px, 38px en variante compacta.
+
+**Modo oscuro:** los tokens se definen para poder invertirse, pero la entrega actual es solo clara. Ver 18.8, fase 5.
+
+### 18.6 Sistema de componentes
+
+Once primitivas. Todo módulo se compone con estas; ninguna pantalla inventa una variante propia.
+
+1. `.panel` — la única tarjeta. Un borde, un radio, un padding, una cabecera (`.panel-title`).
+2. `.metric-card` — el único KPI. Icono con tono, etiqueta mono, cifra tabular, delta.
+3. `.data-table` — la única tabla. Encabezado hundido, fila de 56px, hover, acciones alineadas a la derecha, colapso a tarjetas en móvil.
+4. `.toolbar` — la única barra de filtros. Buscador a la izquierda, filtros al centro, acción primaria a la derecha.
+5. `.tabs` — el único conmutador de vistas.
+6. Campos de formulario — un solo `input/select/textarea`, un solo anillo de foco de latón, una sola rejilla `form-grid`.
+7. `.status` — un solo sistema de chips semánticos (jade, ámbar, poste, info, neutro).
+8. `.empty-state` — un solo vacío, con icono, frase y acción sugerida.
+9. `.modal` — un solo diálogo, con `.confirm-modal` para destructivos y captura de motivo.
+10. Gráficas — una sola serie primaria en latón, cifras tabulares, sin degradados.
+11. `.skeleton` — un solo esqueleto de carga.
+
+**Cómo se aplica sin reescribir 3.100 líneas de TSX:** se reescribe `globals.css` de cero y las ~350 clases existentes se **agrupan en selectores compartidos sobre estas once primitivas**. `services-toolbar`, `team-toolbar`, `resources-toolbar`, `reports-filters`, `commissions-filters` y `day-shift-toolbar` pasan a ser el mismo selector que `.toolbar`. Con eso la consistencia es inmediata y global. Después se tocan los TSX solo donde el problema es de estructura, no de estilo.
+
+### 18.7 Brechas del panel administrativo y qué se agrega
+
+Ordenadas por impacto en la venta.
+
+**P0 — visible en el primer minuto de una demo**
+
+1. **Buscador global funcional (Ctrl/Cmd + K).** Hoy es decorativo. Busca clientes, citas, servicios, profesionales y secciones, con navegación por teclado.
+2. **Checklist de puesta en marcha.** Un negocio nuevo entra a un panel vacío y no sabe qué hacer. Se agrega un panel de primeros pasos (servicios, equipo, horarios, link público, primera cita) que desaparece al completarse.
+3. **Diálogos propios en lugar de los nativos del navegador.** Los 9 casos, con motivo obligatorio donde el backend ya lo exige.
+4. **Uso real del plan en el sidebar.** Leer `/api/admin/billing` y mostrar consumo verdadero en lugar de `citas * 2`.
+5. **Esqueletos de carga** en dashboard, tablas y reportes.
+6. **Moneda del negocio** respetada en todo el panel.
+
+**P1 — completitud del panel**
+
+7. Página completa de alertas, no solo el popover de la campana.
+8. Cabecera de página unificada: acciones de cada módulo suben al shell; se eliminan las cabeceras duplicadas.
+9. Preferencias de cuenta (nombre, contraseña, zona horaria) en su propia sección.
+10. Eliminación del contenido demo de `FeatureSection`.
+11. Estados vacíos con acción en los 23 módulos.
+12. Accesibilidad: foco visible de latón, `aria-*` en botones de solo icono, orden de tabulación en modales, `prefers-reduced-motion`.
+13. Responsive real: tablas que colapsan a tarjetas y barra inferior de navegación en móvil.
+
+**P2 — queda documentado, no entra en esta entrega**
+
+14. Modo oscuro completo.
+15. Mensajería externa, R2 para imágenes, pagos con webhooks, sucursales (ya en la sección 17.3).
+
+### 18.8 Plan de ejecución
+
+**Fase 1 — Fundación.** `.claude/skills/corteza-design/SKILL.md` con las reglas duras. Tokens y reset en `globals.css`. `layout.tsx` sin Playfair. *Aceptación:* build limpio, fuentes reducidas a Geist + Geist Mono.
+
+**Fase 2 — Primitivas y shell.** Las once primitivas y el mapeo de las ~350 clases. Sidebar, topbar y cabecera de página nuevos. *Aceptación:* toolbars, tabs y tablas idénticas en todos los módulos; `npm test` en verde con las cadenas que las pruebas verifican intactas.
+
+**Fase 3 — Módulos.** Dashboard, turno, agenda, citas, clientes, caja/POS, servicios, equipo, horarios, estaciones, reportes, comisiones, crecimiento, configuración, usuarios, seguridad, plan. *Aceptación:* ninguna pantalla con cabecera duplicada ni tarjeta fuera del sistema.
+
+**Fase 4 — Completitud del panel.** Los seis P0 y los P1 7 a 13. *Aceptación:* cero diálogos nativos; buscador operativo; checklist de puesta en marcha funcionando.
+
+**Fase 5 — Superficies públicas y cierre.** Reserva pública, portal de cliente, pago, login y registro con el mismo sistema. Verificación `lint` + `tsc` + `build` + `test`. *Aceptación:* la reserva pública y el panel se leen como el mismo producto.
+
+### 18.9 Reglas anti-genérico (resumen; la versión ejecutable está en la skill)
+
+- Nada de neón, glow, gradientes de color ni glassmorphism.
+- Nada de radios de 20px o más en tarjetas, ni de sombras difusas de colores.
+- Nada de serif decorativa en el panel.
+- Nada de emojis como iconografía.
+- Nada de morado-azul de plantilla de IA, ni de héroe con mancha degradada.
+- Una sola familia tipográfica; la jerarquía se construye con escala, peso y tracking.
+- El color se gana: latón solo en la firma, semánticos solo con significado, el resto es neutro.
+- Todo número monetario o de hora va en cifras tabulares.
+- Filete antes que sombra; sombra solo para lo que flota.
+- Cada pantalla usa las primitivas: si hace falta una clase nueva, primero se revisa por qué no sirve la primitiva.
+
+**Fuentes del benchmark:** [Mangomint review](https://www.glossystack.com/software/mangomint) · [Boulevard vs Mangomint](https://www.goodcall.com/appointment-scheduling-software/boulevard-vs-mangomint) · [Best barbershop software 2026 — Zenoti](https://www.zenoti.com/thecheckin/best-barbershop-software-2026) · [Best barbershop software — Fresha](https://www.fresha.com/for-business/barber/best-barbershop-software) · [Best barber software — GlossGenius](https://glossgenius.com/blog/barber-software)
+
+### 18.10 Corte implementado — 30 de agosto de 2026
+
+**Fundación.** `app/globals.css` reescrito de cero: 146 KB de reglas acumuladas por módulo pasan
+a un sistema de ~2.900 líneas organizado en siete capas (tokens → reset → primitivas → shell →
+módulos → superficies públicas → responsive). Las ~350 clases heredadas del TSX se agrupan en
+selectores compartidos sobre las once primitivas, así que la consistencia llega sin reescribir
+3.100 líneas de componentes. `app/globals.css.bak` guarda la versión anterior.
+
+**Identidad.** Playfair Display eliminado; el sistema queda en Geist + Geist Mono. La acción
+primaria es tinta negra; el latón `#B8862F` se reserva para la firma. Se añadió `--data #35353D`
+para las series de datos, porque el latón estaba apareciendo seis veces en una misma pantalla.
+
+**Panel administrativo — lo que se agregó:**
+
+- Buscador global funcional con `Ctrl/Cmd + K` sobre secciones, clientes, citas, servicios y
+  equipo, con navegación por teclado. Antes el campo del topbar no tenía handler.
+- Checklist de puesta en marcha en el inicio, derivado de datos reales (servicios, equipo,
+  primera cita, primer cobro) y descartable.
+- `app/components/dialogs.tsx`: `confirmAction` y `promptText` reemplazan los **9**
+  `window.confirm` / `window.prompt` que quedaban en cancelaciones, anulaciones de cobro,
+  liquidación de comisiones y los cinco borrados.
+- Medidor de plan real en el sidebar leyendo `/api/admin/billing`; sustituye el `citas * 2` que
+  era un porcentaje inventado.
+- Esqueletos de carga (`ModuleSkeleton`) en lugar de la única línea animada.
+- `moneyCents` respeta la moneda del negocio; el inicio ya no fija `USD`.
+- Estados traducidos en el inicio y en usuarios: se mostraba `en_progreso` y `no_asistio` crudos.
+- `FeatureSection` perdió los textos de demostración de estaciones, marketing, fidelización y
+  configuración.
+
+**Bugs de composición encontrados y corregidos durante la revisión visual:**
+
+1. `input[type="text"]` no alcanza a los `<input>` sin atributo `type`, que son la mayoría del
+   código. **Todos esos campos quedaban sin ancho, sin alto y en línea con su etiqueta.** El
+   selector pasa a `input:not([type="checkbox"])…`.
+2. El bloque `@media (max-width: 940px)` había quedado después del de 860px: en móvil ganaba la
+   consulta equivocada. Reordenadas de mayor a menor.
+3. Topbar móvil: el texto del buscador y el del enlace público se partían en varias líneas y
+   empujaban el avatar fuera de pantalla. Bajo 860px el buscador es icono y el enlace se oculta.
+4. El colapso de tablas a tarjetas dependía de un `data-label` por celda que el TSX no escribe;
+   las filas quedaban como una pila de valores sin nombre de columna. Se cambió a desplazamiento
+   horizontal.
+5. `text-transform: capitalize` convertía «25 – 31 de agosto» en «25 – 31 De Agosto».
+6. El CTA público usaba texto blanco sobre el color del negocio (oro por defecto): ~2,2:1 de
+   contraste. Pasa a tinta; el color del negocio queda como `--booking-accent` en la franja del
+   poster, el sello del ticket y la etiqueta de agenda.
+7. `.login-message { max-width: 30ch }` se calculaba sobre el cuerpo, no sobre el titular: la
+   columna quedaba en ~250 px y el h1 de 46 px se rompía en cuatro líneas.
+8. La vista previa del panel en el acceso empujaba el formulario fuera de pantalla en portátiles;
+   ahora solo aparece cuando cabe (`min-height: 940px`).
+9. La nota flotante de la reserva pública tapaba el nombre del negocio en el poster; deja de
+   flotar y se coloca debajo.
+10. Se sacó `Date.now()` del cuerpo de `BookingApp` (regla `react-hooks/purity`), que dejaba
+    `npm run lint` en error antes de esta sesión.
+
+**Verificación:** `npm run lint` 0 errores (quedan 3 avisos de `<img>` en la galería, que es
+intencional porque las URLs las configura cada negocio), `npx tsc --noEmit` limpio,
+`npm run build` correcto y `npm test` con **36 de 36** pruebas aprobadas. Revisión visual hecha
+en el acceso y la reserva pública sobre el servidor real, y en el panel sobre un banco de pruebas
+local con el CSS compilado, a 1400 px y a 390 px.
+
+**Reglas vivas:** `.claude/skills/corteza-design/SKILL.md` queda como la versión ejecutable del
+sistema. Cualquier sesión futura debe leerla antes de tocar CSS o pantallas.
+
+**Lo que queda pendiente de esta fase:** modo oscuro, y la revisión visual del panel autenticado
+sobre datos reales, que requiere iniciar sesión con una cuenta del negocio.
