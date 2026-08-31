@@ -3,7 +3,11 @@ import { ensureDatabase } from "../db/init";
 
 const SESSION_COOKIE = "corteza_session";
 const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
-export const PASSWORD_ITERATIONS = 210_000;
+/* El runtime de Cloudflare Workers limita crypto.subtle.deriveBits con
+   PBKDF2 a un máximo de 100.000 iteraciones (por encima de eso lanza
+   "iteration counts above 100000 are not supported"). Node.js no tiene ese
+   tope, así que hashes generados fuera de Workers deben respetarlo también. */
+export const PASSWORD_ITERATIONS = 100_000;
 
 export type AuthUser = {
   userId: string;
