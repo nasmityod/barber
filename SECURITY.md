@@ -1,20 +1,20 @@
-# Seguridad de Corteza
+# Seguridad de 787 Barber Studio
 
-Corteza aplica defensa en profundidad, pero ningún sistema puede prometer riesgo cero. Este documento describe los controles implementados y los requisitos operativos que no deben relajarse al publicar.
+El sistema aplica defensa en profundidad, pero ningún sistema puede prometer riesgo cero. Este documento describe los controles implementados y los requisitos operativos que no deben relajarse al publicar.
 
 ## Fronteras de confianza
 
-- El panel administrativo confía únicamente en la identidad autenticada que inyecta Sites. No acepta un usuario, email, negocio ni rol enviados por el cliente.
+- El panel administrativo confía únicamente en la sesión verificada en servidor. No acepta un usuario, email, negocio ni rol enviados por el cliente.
 - La autorización se vuelve a comprobar en el servidor para cada API administrativa.
 - Todas las consultas privadas incluyen `business_id`; los `JOIN` también verifican el mismo negocio.
 - La reserva pública solo expone catálogo y disponibilidad. La API administrativa, que contiene datos personales, exige identidad y rol.
 
 ## Controles implementados
 
-- Inicio de sesión delegado mediante SIWC/Sites, sin contraseñas almacenadas por Corteza.
+- Autenticación propia sobre Workers y D1: contraseñas guardadas como hash con sal única, sin proveedores externos de identidad.
 - Roles base: propietario, administrador, recepción y profesional.
-- Invitaciones ligadas al email verificado de la identidad.
-- Bootstrap atómico: solo el primer usuario autenticado de una instalación privada vacía puede convertirse en propietario.
+- Accesos creados por el propietario con contraseña temporal de un solo uso.
+- Bootstrap atómico: solo el primer usuario registrado de una instalación vacía puede convertirse en propietario.
 - Protección de mismo origen para mutaciones contra CSRF.
 - Validación estricta de formato, longitud, tipo de contenido y tamaño del cuerpo.
 - Rate limiting persistente por identidad, IP seudonimizada y email seudonimizado.

@@ -1,9 +1,9 @@
-# Corteza
+# 787 Barber Studio
 
-A full-stack barber management app running on
-[vinext](https://github.com/cloudflare/vinext), Cloudflare Workers and D1.
+Sistema de gestión y reservas de **787 Barber Studio**, sobre
+[vinext](https://github.com/cloudflare/vinext), Cloudflare Workers y D1.
 
-## Quick Start
+## Inicio rápido
 
 ```bash
 npm install
@@ -11,20 +11,32 @@ npm run dev
 npm run build
 ```
 
-## Deployment
+## Despliegue
 
 ```bash
 npm run deploy
 ```
 
-The public booking flow is available at `/reservar/demo`. The administrative
-dashboard uses Corteza credentials, secure server-side sessions, membership and
-role checks, same-origin mutations, rate limits, and an audit trail.
+La reserva pública vive en `/reservar/<slug>` (`/reservar/demo` en la base
+inicial). El panel administrativo usa credenciales propias, sesiones seguras en
+servidor, comprobación de membresía y rol, mutaciones de mismo origen, límites
+de tasa y registro de auditoría.
 
-## Useful Commands
+## Marca
 
-- `npm run dev`: start local development
-- `npm run build`: verify the production build
-- `npm run lint`: run ESLint
-- `npm run test`: run rendered HTML tests
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+Los assets de 787 viven en `public/brand/` y se generan desde el logo oficial:
+
+```bash
+node scripts/build-brand-assets.mjs
+```
+
+Reglas de uso, tokens y composición: [`docs/787-VISUAL-IDENTITY.md`](docs/787-VISUAL-IDENTITY.md).
+
+## Comandos útiles
+
+- `npm run dev`: desarrollo local
+- `npm run build`: verifica el build de producción
+- `npm run lint`: ESLint
+- `npm run test`: build + pruebas de modelo y de HTML renderizado
+- `npm run db:generate`: genera migraciones de Drizzle tras cambiar el esquema
+- `node scripts/build-brand-assets.mjs`: regenera logo, marca y OG image

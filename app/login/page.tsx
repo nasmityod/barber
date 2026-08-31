@@ -1,10 +1,8 @@
 import { redirect } from "next/navigation";
-import {
-  CalendarCheck, Check, Clock3, LockKeyhole,
-  Scissors, ShieldCheck, Sparkles, TrendingUp, UsersRound,
-} from "lucide-react";
+import { Check, ShieldCheck, Sparkles } from "lucide-react";
 import { getSessionUser } from "../auth";
 import { LoginForm } from "../components/LoginForm";
+import { BrandLockup, BrandLogo } from "../components/Brand";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -16,57 +14,32 @@ export default async function LoginPage() {
   return (
     <main className="login-page">
       <section className="login-copy">
-        <div className="login-brand" aria-label="Corteza">
-          <span><Scissors /></span>
-          <strong>CORTEZA</strong>
-        </div>
+        <BrandLockup caption="Sistema interno" />
 
         <div className="login-message">
-          <span className="login-kicker"><Sparkles /> Software para barberías de verdad</span>
-          <h1>Negro en el piso.<br /><em>Oro en la caja.</em></h1>
-          <p>Agenda, sillas, cobros y arqueo en un panel hecho para el ritmo de una barbería: rápido, claro y sin plantillas genéricas.</p>
+          <span className="login-kicker"><Sparkles /> Sistema interno del estudio</span>
+          <h1>Todo el estudio,<br /><em>en un solo panel.</em></h1>
+          <p>Agenda, turno del día, clientes, cobros y arqueo de 787 Barber Studio. Entrada reservada al equipo.</p>
           <ul>
             <li><Check /> Agenda y reservas en tiempo real</li>
-            <li><Check /> Información aislada por negocio</li>
-            <li><Check /> Accesos y acciones protegidas</li>
+            <li><Check /> Cobros y caja con trazabilidad</li>
+            <li><Check /> Permisos por rol y sesión protegida</li>
           </ul>
         </div>
 
         <footer><ShieldCheck /> Protección de identidad y datos activa</footer>
+        <span className="watermark-787" aria-hidden="true">787</span>
       </section>
 
       <section className="login-access">
-        <div className="login-preview" aria-hidden="true">
-          <div className="preview-toolbar"><i /><i /><i /><span>Corteza Studio</span></div>
-          <div className="preview-body">
-            <aside><b>CT</b><i /><i /><i /><i /></aside>
-            <div className="preview-content">
-              <span>RESUMEN DE HOY</span>
-              <strong>Todo bajo control</strong>
-              <div className="preview-metrics">
-                <div><CalendarCheck /><small>CITAS</small><b>08</b></div>
-                <div><TrendingUp /><small>INGRESOS</small><b>$164</b></div>
-                <div><UsersRound /><small>CLIENTES</small><b>06</b></div>
-              </div>
-              <div className="preview-schedule">
-                <header><b>Próximas citas</b><span>Hoy</span></header>
-                <div><time>10:30</time><i className="gold"/><p><b>Corte + Barba</b><small>55 min</small></p></div>
-                <div><time>12:00</time><i className="gold"/><p><b>Corte Signature</b><small>35 min</small></p></div>
-                <div><time>15:30</time><i className="gold"/><p><b>Barba Ritual</b><small>25 min</small></p></div>
-              </div>
-            </div>
-          </div>
-          <div className="preview-float"><Clock3 /><span><b>Agenda actualizada</b><small>Disponibilidad en tiempo real</small></span></div>
-        </div>
-
         <div className="login-card">
-          <div className="login-lock"><LockKeyhole /></div>
-          <span className="eyebrow">Panel administrativo</span>
-          <h2>Bienvenido a Corteza</h2>
-          <p>Inicia sesión con las credenciales privadas de tu barbería.</p>
+          <BrandLogo />
+          <span className="eyebrow">Acceso privado</span>
+          <h2>Entra a 787 Barber Studio</h2>
+          <p>Usa las credenciales del estudio. Cada intento queda registrado.</p>
           <LoginForm />
-          <p className="login-switch">¿Nuevo negocio? <Link href="/registro">Crea tu cuenta</Link></p>
-          <div className="login-security"><ShieldCheck /><span><b>Acceso propio de Corteza</b><small>Sesión cifrada, protección contra intentos repetidos y permisos por rol.</small></span></div>
+          <p className="login-switch">¿Configuras un negocio nuevo? <Link href="/registro">Crea tu cuenta</Link></p>
+          <div className="login-security"><ShieldCheck /><span><b>Acceso propio de 787</b><small>Sesión cifrada, protección contra intentos repetidos y permisos por rol.</small></span></div>
         </div>
       </section>
     </main>

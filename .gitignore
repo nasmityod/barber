@@ -51,4 +51,4 @@ next-env.d.ts
 
 # stray backups
 *.bak
-barber.zip
+/barber*.zip

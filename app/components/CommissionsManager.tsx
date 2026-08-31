@@ -39,6 +39,6 @@ function RulePanel({data,editing,setEditing,saving,request}:{data:CommissionData
 }
 
 function CommissionRow({item,checked,disabled,onToggle}:{item:Record<string,unknown>;checked:boolean;disabled:boolean;onToggle:()=>void}){return <div className={`commission-row ${String(item.status)!=="pending"?"settled":""}`}><input type="checkbox" checked={checked} disabled={disabled||String(item.status)!=="pending"} onChange={onToggle} aria-label={`Seleccionar comisión de ${String(item.professionalName)}`}/><div><strong>{String(item.professionalName)} · {String(item.serviceName)}</strong><small>{String(item.ruleName)} · base {money(Number(item.basisCents??0))} · {String(item.status)}</small></div><b>{money(Number(item.amountCents??0))}</b></div>}
-function Metric({label,value}:{label:string;value:string}){return <div className="metric-card"><div className="metric-icon olive"><CircleDollarSign size={18}/></div><span>{label}</span><strong>{value}</strong><small>Datos persistentes</small></div>}
+function Metric({label,value}:{label:string;value:string}){return <div className="metric-card"><div className="metric-icon ok"><CircleDollarSign size={18}/></div><span>{label}</span><strong>{value}</strong><small>Datos persistentes</small></div>}
 function scopeLabel(value:string){return ({default:"General",professional:"Profesional",service:"Servicio",category:"Categoría"} as Record<string,string>)[value]??value}
 function money(cents:number){return new Intl.NumberFormat("es-VE",{style:"currency",currency:"USD"}).format(cents/100)}

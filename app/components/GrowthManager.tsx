@@ -1,6 +1,7 @@
 "use client";
-/* Gallery URLs are tenant-configured and intentionally rendered without a static image host allowlist. */
-/* eslint-disable @next/next/no-img-element */
+/* Las URLs de la galería las configura cada negocio; se renderizan sin lista
+   blanca de hosts a propósito. La regla no-img-element se desactiva en
+   eslint.config.mjs para todo el proyecto. */
 
 import { useEffect, useState } from "react";
 import { apiError, readJsonObject } from "./api-json";

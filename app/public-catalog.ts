@@ -19,8 +19,12 @@ export type PublicCatalog = {
   reviews: PublicReview[];
 };
 
-function barberAccent(value: string) {
-  return /^#2563eb$/i.test(value.trim()) ? "#C6A15B" : value;
+/** Oro 787. Migra en lectura los acentos heredados (azul de plantilla y el
+ *  latón del sistema anterior) sin tocar los datos guardados. */
+export const BRAND_ACCENT = "#C79A2B";
+const LEGACY_ACCENTS = /^#(2563eb|c6a15b)$/i;
+export function barberAccent(value: string) {
+  return LEGACY_ACCENTS.test(value.trim()) ? BRAND_ACCENT : value;
 }
 
 export async function getPublicCatalog(db: D1Database, slug: string): Promise<PublicCatalog | null> {
@@ -35,9 +39,9 @@ export async function getPublicCatalog(db: D1Database, slug: string): Promise<Pu
       COALESCE(settings.cancellation_fee_percent, 0) AS cancellationFeePercent,
       COALESCE(settings.show_prices, 1) AS showPrices, COALESCE(settings.show_gallery, 1) AS showGallery,
       COALESCE(settings.show_reviews, 1) AS showReviews,
-      COALESCE(page.headline, 'Tu mejor versión empieza aquí.') AS headline,
+      COALESCE(page.headline, 'Reserva tu silla. Sin llamadas, sin esperas.') AS headline,
       COALESCE(page.subtitle, 'Elige un servicio, consulta disponibilidad real y confirma sin esperas.') AS subtitle,
-      COALESCE(page.primary_color, '#C6A15B') AS primaryColor,
+      COALESCE(page.primary_color, '#C79A2B') AS primaryColor,
       COALESCE(page.public_note, 'Reserva online disponible todos los días.') AS publicNote,
       COALESCE(page.show_services, 1) AS showServices, COALESCE(page.show_professionals, 1) AS showProfessionals,
       COALESCE(page.show_contact, 1) AS showContact, COALESCE(page.show_policies, 1) AS showPolicies
@@ -78,7 +82,7 @@ export async function getPublicCatalog(db: D1Database, slug: string): Promise<Pu
       cancellationFeePercent: Number(business.cancellationFeePercent ?? 0), showPrices: toBoolean(business.showPrices),
       showGallery: toBoolean(business.showGallery), showReviews: toBoolean(business.showReviews),
       headline: String(business.headline ?? ""), subtitle: String(business.subtitle ?? ""),
-      primaryColor: barberAccent(String(business.primaryColor ?? "#C6A15B")), publicNote: String(business.publicNote ?? ""),
+      primaryColor: barberAccent(String(business.primaryColor ?? "#C79A2B")), publicNote: String(business.publicNote ?? ""),
       showServices: toBoolean(business.showServices), showProfessionals: toBoolean(business.showProfessionals),
       showContact: toBoolean(business.showContact), showPolicies: toBoolean(business.showPolicies),
     },

@@ -22,7 +22,7 @@ export function LoginForm() {
     <label>Correo electrónico<input name="email" type="email" autoComplete="username" required maxLength={254} placeholder="tu@barberia.com" /></label>
     <label>Contraseña<span className="password-field"><input name="password" type={showPassword?"text":"password"} autoComplete="current-password" required minLength={8} maxLength={128} placeholder="Tu contraseña"/><button type="button" onClick={()=>setShowPassword((value)=>!value)} aria-label={showPassword?"Ocultar contraseña":"Mostrar contraseña"}>{showPassword?<EyeOff/>:<Eye/>}</button></span></label>
     {error&&<p className="form-error" role="alert">{error}</p>}
-    <button className="login-button" disabled={saving}>{saving?"Verificando…":<>Entrar al dashboard <ArrowRight /></>}</button>
+    <button className="login-button" disabled={saving}>{saving?"Verificando…":<>Entrar al panel <ArrowRight /></>}</button>
     <Link className="login-recovery" href="/recuperar-clave">¿Olvidaste tu contraseña?</Link>
   </form>;
 }

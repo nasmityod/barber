@@ -22,9 +22,9 @@ export async function ensureDatabase() {
       updated_at TEXT NOT NULL
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS booking_page_settings (
-      business_id TEXT PRIMARY KEY, headline TEXT NOT NULL DEFAULT 'Tu mejor versión empieza aquí.',
+      business_id TEXT PRIMARY KEY, headline TEXT NOT NULL DEFAULT 'Reserva tu silla. Sin llamadas, sin esperas.',
       subtitle TEXT NOT NULL DEFAULT 'Elige un servicio, consulta disponibilidad real y confirma sin esperas.',
-      primary_color TEXT NOT NULL DEFAULT '#C6A15B', public_note TEXT NOT NULL DEFAULT 'Reserva online disponible todos los días.',
+      primary_color TEXT NOT NULL DEFAULT '#C79A2B', public_note TEXT NOT NULL DEFAULT 'Reserva online disponible todos los días.',
       show_services INTEGER NOT NULL DEFAULT 1, show_professionals INTEGER NOT NULL DEFAULT 1,
       show_contact INTEGER NOT NULL DEFAULT 1, show_policies INTEGER NOT NULL DEFAULT 1,
       section_order TEXT NOT NULL DEFAULT '["services","gallery","reviews","contact"]', updated_at TEXT NOT NULL
@@ -630,7 +630,7 @@ export async function ensureDatabase() {
   ]);
 
   await db.batch([
-    db.prepare("INSERT OR IGNORE INTO businesses (id,name,slug,owner_email,created_at) VALUES ('biz_demo','Corteza Studio','demo','owner@corteza.studio',?)").bind(new Date().toISOString()),
+    db.prepare("INSERT OR IGNORE INTO businesses (id,name,slug,owner_email,created_at) VALUES ('biz_demo','787 Barber Studio','demo','owner@787barberstudio.com',?)").bind(new Date().toISOString()),
     db.prepare("INSERT OR IGNORE INTO business_settings (business_id,updated_at) VALUES ('biz_demo',?)").bind(new Date().toISOString()),
     db.prepare("INSERT OR IGNORE INTO booking_page_settings (business_id,updated_at) VALUES ('biz_demo',?)").bind(new Date().toISOString()),
     db.prepare(`INSERT OR IGNORE INTO subscriptions (id,business_id,plan_id,status,provider,current_period_start,current_period_end,created_at)
@@ -638,13 +638,27 @@ export async function ensureDatabase() {
     db.prepare("INSERT OR IGNORE INTO services (id,business_id,name,category,duration_minutes,price_cents) VALUES ('svc_corte','biz_demo','Corte Signature','Cortes',35,1800)"),
     db.prepare("INSERT OR IGNORE INTO services (id,business_id,name,category,duration_minutes,price_cents) VALUES ('svc_barba','biz_demo','Barba Ritual','Barba',25,1200)"),
     db.prepare("INSERT OR IGNORE INTO services (id,business_id,name,category,duration_minutes,price_cents) VALUES ('svc_combo','biz_demo','Corte + Barba','Combos',55,2800)"),
-    db.prepare("INSERT OR IGNORE INTO professionals (id,business_id,name,specialty,email,phone) VALUES ('pro_mateo','biz_demo','Mateo Silva','Fades · Barba · Clásicos','mateo@corteza.studio','+58 412 555 0184')"),
+    db.prepare("INSERT OR IGNORE INTO professionals (id,business_id,name,specialty,email,phone) VALUES ('pro_mateo','biz_demo','Mateo Silva','Fades · Barba · Clásicos','mateo@787barberstudio.com','+58 412 555 0184')"),
     ...[1, 2, 3, 4, 5, 6].map((weekday) =>
       db.prepare("INSERT OR IGNORE INTO business_hours (id,business_id,professional_id,weekday,start_time,end_time,active) VALUES (?,'biz_demo','pro_mateo',?,'09:00','19:00',1)")
         .bind(`hours_pro_mateo_${weekday}`, weekday)
     ),
     db.prepare("PRAGMA optimize"),
   ]);
+  /* Rebrand 787: sólo toca valores que siguen siendo los predeterminados del
+     sistema anterior. Si el negocio ya personalizó su nombre, su titular o su
+     color, no se modifica nada. */
+  const rebrand = await db.prepare(`INSERT OR IGNORE INTO runtime_migrations (key,applied_at)
+    VALUES ('brand_787_v1',?) RETURNING key`).bind(new Date().toISOString()).first();
+  if (rebrand) {
+    await db.batch([
+      db.prepare("UPDATE businesses SET name='787 Barber Studio' WHERE id='biz_demo' AND name='Corteza Studio'"),
+      db.prepare("UPDATE booking_page_settings SET headline='Reserva tu silla. Sin llamadas, sin esperas.' WHERE headline='Tu mejor versión empieza aquí.'"),
+      db.prepare("UPDATE booking_page_settings SET primary_color='#C79A2B' WHERE upper(primary_color) IN ('#C6A15B','#2563EB')"),
+      db.prepare("UPDATE alerts SET title='Bienvenido a 787 Barber Studio' WHERE title='Bienvenido a Corteza'"),
+    ]);
+  }
+
   const backfill = await db.prepare(`INSERT OR IGNORE INTO runtime_migrations (key,applied_at)
     VALUES ('professional_services_v1',?) RETURNING key`).bind(new Date().toISOString()).first();
   if (backfill) {

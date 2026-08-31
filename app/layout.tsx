@@ -10,21 +10,33 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0b0b0c",
+  themeColor: "#0c0c0e",
 };
+
+const TITLE = "787 Barber Studio — Gestión y reservas";
+const DESCRIPTION = "Agenda, turno del día, caja y reservas online de 787 Barber Studio.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
   const base = new URL(`${protocol}://${host}`);
+  const image = new URL("/brand/787-og.png", base).toString();
   return {
     metadataBase: base,
-    title: "Corteza — Barbería, agenda y caja",
-    description: "Agenda, sillas, caja y reservas online para barberías. Negro en el piso, oro en el cobro.",
-    icons: { icon: "/favicon.svg" },
-    openGraph: { title: "Corteza", description: "Agenda, caja y reservas para barberías", images: [{ url: new URL("/og.png", base).toString(), width: 1200, height: 630 }] },
-    twitter: { card: "summary_large_image", title: "Corteza", description: "Agenda, caja y reservas para barberías", images: [new URL("/og.png", base).toString()] },
+    title: TITLE,
+    description: DESCRIPTION,
+    applicationName: "787 Barber Studio",
+    icons: { icon: [{ url: "/favicon.svg", type: "image/svg+xml" }], apple: "/brand/787-icon.svg" },
+    openGraph: {
+      type: "website",
+      siteName: "787 Barber Studio",
+      title: TITLE,
+      description: DESCRIPTION,
+      locale: "es_VE",
+      images: [{ url: image, width: 1200, height: 630, alt: "787 Barber Studio" }],
+    },
+    twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [image] },
   };
 }
 

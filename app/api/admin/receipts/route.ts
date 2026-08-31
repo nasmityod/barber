@@ -28,8 +28,38 @@ export async function GET(request: Request) {
       const refunds = await db.prepare("SELECT COALESCE(SUM(amount_cents),0) AS total FROM refunds WHERE sale_id=? AND business_id=? AND status='completed'").bind(saleId, context.businessId).first<{total:number}>();
       receiptNumber = row.receiptNumber; title = "Venta de productos"; clientName = client?.name ?? "Cliente mostrador"; details = (items.results ?? []).map((item) => `${item.quantity}× ${item.name}`).join(" · "); totalCents = row.totalCents; tipCents = row.tipCents; refundedCents = refunds?.total ?? 0;
     }
-    const currency = business?.currency ?? "USD"; const netCents = totalCents + tipCents - refundedCents; const businessName = escapeHtml(business?.name ?? "Corteza");
-    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(receiptNumber)} · ${businessName}</title><style>body{font:15px Georgia,serif;color:#111;max-width:420px;margin:40px auto;padding:24px;background:#fff}header{border-bottom:3px solid #c6a15b;padding-bottom:18px}h1{margin:0 0 6px;font-size:22px;letter-spacing:.12em}p{color:#5c5c62;margin:5px 0}.row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px dashed #e4e4e7}.total{font-size:20px;font-weight:800;border:0}button{margin-top:24px;width:100%;padding:12px;border:0;border-radius:8px;background:#111;color:#c6a15b;font-weight:700}@media print{button{display:none}body{margin:0}}</style></head><body><header><h1>${businessName}</h1><p>Recibo ${escapeHtml(receiptNumber)}</p><p>${new Date().toLocaleString("es-VE")}</p></header><section><div class="row"><span>Cliente</span><strong>${escapeHtml(clientName)}</strong></div><div class="row"><span>Concepto</span><strong>${escapeHtml(title)}</strong></div><p>${escapeHtml(details)}</p><div class="row"><span>Subtotal</span><strong>${formatMoney(totalCents, currency)}</strong></div><div class="row"><span>Propina</span><strong>${formatMoney(tipCents, currency)}</strong></div>${refundedCents ? `<div class="row"><span>Reembolsado</span><strong>-${formatMoney(refundedCents, currency)}</strong></div>` : ""}<div class="row total"><span>Total neto</span><strong>${formatMoney(netCents, currency)}</strong></div></section><button onclick="window.print()">Imprimir recibo</button></body></html>`;
+    const currency = business?.currency ?? "USD"; const netCents = totalCents + tipCents - refundedCents;
+    const businessName = escapeHtml(business?.name ?? "787 Barber Studio");
+    const issuedAt = new Date().toLocaleString("es-VE", { timeZone: "America/Caracas" });
+    const rows = [
+      ["Cliente", escapeHtml(clientName)],
+      ["Concepto", escapeHtml(title)],
+      ["Subtotal", formatMoney(totalCents, currency)],
+      ["Propina", formatMoney(tipCents, currency)],
+      ...(refundedCents ? [["Reembolsado", `-${formatMoney(refundedCents, currency)}`]] : []),
+    ].map(([label, value]) => `<div class="row"><span>${label}</span><strong>${value}</strong></div>`).join("");
+    /* Recibo sobrio: debe leerse igual en pantalla, en blanco y negro y en una
+       impresora térmica. Sin imágenes: sólo tipografía, filete y cifras. */
+    const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Recibo ${escapeHtml(receiptNumber)} · ${businessName}</title><style>
+:root{--ink:#101014;--muted:#6b6a72;--line:#d6d2c9;--gold:#c79a2b;--red:#d71e1e}
+*{box-sizing:border-box}
+body{margin:0;padding:40px 20px;background:#f3f2ef;color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.sheet{max-width:420px;margin:0 auto;padding:32px 28px;background:#fff;border:1px solid var(--line);border-radius:12px}
+.rule{height:3px;margin-bottom:22px;background:repeating-linear-gradient(90deg,var(--gold) 0 28px,var(--ink) 28px 60px,var(--red) 60px 88px)}
+h1{margin:0;font-size:19px;font-weight:600;letter-spacing:.16em;text-transform:uppercase}
+.meta{margin-top:10px;display:flex;justify-content:space-between;gap:12px;font-family:ui-monospace,"SFMono-Regular",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.detail{margin:18px 0 4px;font-size:13px;color:var(--muted)}
+section{margin-top:22px;border-top:1px solid var(--line)}
+.row{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.row span{color:var(--muted)}
+.row strong{font-family:ui-monospace,"SFMono-Regular",monospace;font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+.total{border-bottom:0;padding-top:16px;margin-top:6px;border-top:2px solid var(--ink);font-size:17px}
+.total span{color:var(--ink);font-weight:600}
+.total strong{font-size:21px}
+footer{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);line-height:1.5}
+button{margin:22px auto 0;display:block;width:100%;max-width:420px;height:44px;border:0;border-radius:9px;background:var(--ink);color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+@media print{body{margin:0;padding:0;background:#fff}.sheet{max-width:none;border:0;border-radius:0;padding:0}button{display:none}}
+</style></head><body><div class="sheet"><div class="rule"></div><header><h1>${businessName}</h1><div class="meta"><span>Recibo ${escapeHtml(receiptNumber)}</span><span>${escapeHtml(issuedAt)}</span></div></header><p class="detail">${escapeHtml(details)}</p><section>${rows}<div class="row total"><span>Total neto</span><strong>${formatMoney(netCents, currency)}</strong></div></section><footer>Documento generado por el sistema de 787 Barber Studio. Conserva este comprobante para cualquier aclaratoria.</footer></div><button type="button" onclick="window.print()">Imprimir recibo</button></body></html>`;
     return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
   } catch (error) { return errorResponse(error); }
 }

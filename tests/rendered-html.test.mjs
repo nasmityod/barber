@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { join } from "node:path";
 import test, { after, before } from "node:test";
 
-const PORT = Number(process.env.CORTEZA_TEST_PORT ?? 3210);
+const PORT = Number(process.env.BARBER_TEST_PORT ?? 3210);
 const BASE = `http://localhost:${PORT}`;
 
 let server;
@@ -14,9 +14,9 @@ async function hasServer() {
   try {
     const response = await fetch(`${BASE}/login`);
     const html = await response.text();
-    // Only reuse the port when Corteza itself is answering; another project's
-    // dev server on the same port must not be mistaken for ours.
-    return html.includes("Corteza");
+    // Only reuse the port when this app is answering; another project's dev
+    // server on the same port must not be mistaken for ours.
+    return html.includes("787 Barber Studio");
   } catch {
     return false;
   }
@@ -57,8 +57,8 @@ test("renders the public sign-in screen", async () => {
   const response = await fetch(`${BASE}/login`);
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Bienvenido a Corteza/);
-  assert.match(html, /Entrar al dashboard/);
+  assert.match(html, /Entra a 787 Barber Studio/);
+  assert.match(html, /Entrar al panel/);
   assert.match(html, /Correo electrónico/);
   assert.doesNotMatch(html, /ChatGPT|OpenAI/i);
 });
@@ -67,7 +67,7 @@ test("renders the public booking experience", async () => {
   const response = await render("/reservar/demo");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Tu mejor versión/);
+  assert.match(html, /Reserva tu silla/);
   assert.match(html, /Reservar ahora/);
   assert.match(html, /Corte Signature/);
 });

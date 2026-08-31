@@ -15,7 +15,7 @@ export function RegisterForm() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "No pudimos crear tu negocio."); setSaving(false); }
   };
   return <form className="login-form register-form" onSubmit={submit}>
-    <label>Nombre del negocio<input name="businessName" required minLength={2} maxLength={100} placeholder="Corteza Studio" /></label>
+    <label>Nombre del negocio<input name="businessName" required minLength={2} maxLength={100} placeholder="Nombre de tu barbería" /></label>
     <label>Tu nombre<input name="displayName" required minLength={2} maxLength={100} autoComplete="name" placeholder="Andrea Silva" /></label>
     <label>Correo electrónico<input name="email" type="email" required maxLength={254} autoComplete="email" placeholder="tu@barberia.com" /></label>
     <label>Enlace público (opcional)<input name="slug" maxLength={50} pattern="[A-Za-z0-9-]+" placeholder="mi-barberia" /><small className="password-help">Se usará en tu enlace de reservas.</small></label>

@@ -14,6 +14,15 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "cloudflare-env.d.ts",
   ]),
+  {
+    rules: {
+      // El proyecto se sirve desde Cloudflare Workers sin el optimizador de
+      // imágenes de Next: `next/image` no aporta aquí y añadiría un loader que
+      // no existe en este runtime. Los assets de marca ya van dimensionados y
+      // optimizados por scripts/build-brand-assets.mjs.
+      "@next/next/no-img-element": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

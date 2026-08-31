@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 
 /**
- * Diálogos propios de Corteza. Sustituyen a window.confirm y window.prompt, que
+ * Diálogos propios del sistema. Sustituyen a window.confirm y window.prompt, que
  * rompen la continuidad visual justo en las acciones de mayor riesgo (cancelar
  * una cita, anular un cobro, eliminar un registro).
  *
@@ -93,11 +93,11 @@ export function DialogHost() {
 
   return (
     <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close(null); }}>
-      <div className={`modal confirm-modal ${dialog.destructive ? "destructive" : ""}`} role="dialog" aria-modal="true" aria-labelledby="corteza-dialog-title" ref={panelRef}>
+      <div className={`modal confirm-modal ${dialog.destructive ? "destructive" : ""}`} role="dialog" aria-modal="true" aria-labelledby="app-dialog-title" ref={panelRef}>
         <div className="modal-head">
           <div>
             {dialog.destructive && <span className="eyebrow"><AlertTriangle size={12} /> Acción irreversible</span>}
-            <h2 id="corteza-dialog-title">{dialog.title}</h2>
+            <h2 id="app-dialog-title">{dialog.title}</h2>
           </div>
           <button type="button" className="icon-button" onClick={() => close(null)} aria-label="Cerrar"><X size={18} /></button>
         </div>

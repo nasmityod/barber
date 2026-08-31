@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Check, Scissors, ShieldCheck, X } from "lucide-react";
+import { CalendarDays, Check, ShieldCheck, X } from "lucide-react";
+import { BrandMark } from "./Brand";
 import { apiError, readJsonObject } from "./api-json";
 
 type PortalData = {
@@ -27,12 +28,11 @@ export function ClientPortal({ token, initialData }: { token: string; initialDat
   return (
     <div className="client-portal-card">
       <header className="client-portal-head">
-        <div className="booking-brand"><span><Scissors /></span><div><strong>{data.business.name.toUpperCase()}</strong><small>PORTAL DE CITA</small></div></div>
+        <div className="booking-brand"><BrandMark /><div><strong>{data.business.name.toUpperCase()}</strong><small>Portal de cita</small></div></div>
         <ShieldCheck />
       </header>
       <div className="client-portal-intro">
-        <span className="eyebrow">Portal de cita</span>
-        <h1>Gestiona tu cita.</h1>
+        <h1>Gestiona tu cita</h1>
         <p>Hola, <b>{data.client.name}</b>. Consulta los detalles y haz cambios desde este enlace seguro.</p>
       </div>
       <section className="portal-appointment-card">

@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         db.prepare("INSERT INTO professionals (id,business_id,name,specialty,email,phone,active) VALUES (?,?,?,'Corte y barbería',?, '',1)").bind(professionalId, businessId, displayName, email),
         db.prepare("INSERT INTO professional_services (business_id,professional_id,service_id) VALUES (?,?,?)").bind(businessId, professionalId, serviceId),
         db.prepare("INSERT INTO terms_acceptances (id,member_id,business_id,version,ip_hash,accepted_at) VALUES (?,?,?,'2026-08-01',?,?)").bind(crypto.randomUUID(), memberId, businessId, ipHash, nowIso),
-        db.prepare("INSERT INTO alerts (id,business_id,kind,title,message,severity,created_at) VALUES (?,?, 'welcome','Bienvenido a Corteza','Configura tus horarios y comparte tu enlace de reservas.','info',?)").bind(crypto.randomUUID(), businessId, nowIso),
+        db.prepare("INSERT INTO alerts (id,business_id,kind,title,message,severity,created_at) VALUES (?,?, 'welcome','Bienvenido a 787 Barber Studio','Configura tus horarios y comparte tu enlace de reservas.','info',?)").bind(crypto.randomUUID(), businessId, nowIso),
         db.prepare("INSERT INTO business_hours (id,business_id,professional_id,weekday,start_time,end_time,active) VALUES (?,?,?,1,'09:00','18:00',1)").bind(crypto.randomUUID(), businessId, professionalId),
         db.prepare("INSERT INTO business_hours (id,business_id,professional_id,weekday,start_time,end_time,active) VALUES (?,?,?,2,'09:00','18:00',1)").bind(crypto.randomUUID(), businessId, professionalId),
         db.prepare("INSERT INTO business_hours (id,business_id,professional_id,weekday,start_time,end_time,active) VALUES (?,?,?,3,'09:00','18:00',1)").bind(crypto.randomUUID(), businessId, professionalId),

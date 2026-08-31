@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { apiError, isJsonObject, readJsonObject } from "./api-json";
 import { BarChart3, CircleDollarSign, Download, RefreshCw, TrendingDown, TrendingUp, UsersRound } from "lucide-react";
 
@@ -205,7 +206,7 @@ export function ReportsManager() {
         <div className="hour-heat">
           {hoursBySlot.map((slot)=>{
             const intensity=slot.count/hourMax;
-            return <b key={slot.hour} title={`${String(slot.hour).padStart(2,"0")}:00 · ${slot.count}`} style={{background:`rgba(198,161,91,${0.12+intensity*0.88})`}}>{String(slot.hour).padStart(2,"0")}</b>;
+            return <b key={slot.hour} title={`${String(slot.hour).padStart(2,"0")}:00 · ${slot.count}`} style={{"--heat":intensity} as CSSProperties}>{String(slot.hour).padStart(2,"0")}</b>;
           })}
         </div>
       </section>
@@ -273,7 +274,7 @@ export function ReportsManager() {
 function Kpi({label,value,delta,hint}:{label:string;value:string;delta:number;hint:string}) {
   const up=delta>=0;
   return <div className="metric-card">
-    <div className={`metric-icon ${up?"olive":"sand"}`}>{up?<TrendingUp/>:<TrendingDown/>}</div>
+    <div className={`metric-icon ${up?"ok":"danger"}`}>{up?<TrendingUp/>:<TrendingDown/>}</div>
     <span>{label}</span>
     <strong>{value}</strong>
     <small className={`metric-delta ${up?"up":"down"}`}>{up?"▲":"▼"} {Math.abs(delta)}% vs periodo anterior</small>

@@ -1,5 +1,6 @@
 import { ensureDatabase } from "../../../../db/init";
 import { clientAddress, enforceRateLimit, errorResponse, HttpError, sha256 } from "../../../security";
+import { barberAccent } from "../../../public-catalog";
 
 export async function GET(request: Request) {
   try {
@@ -23,9 +24,9 @@ export async function GET(request: Request) {
         COALESCE(settings.cancellation_window_hours, 24) AS cancellationWindowHours,
         COALESCE(settings.cancellation_fee_percent, 0) AS cancellationFeePercent,
         COALESCE(settings.show_prices, 1) AS showPrices,
-        COALESCE(page.headline, 'Tu mejor versión empieza aquí.') AS headline,
+        COALESCE(page.headline, 'Reserva tu silla. Sin llamadas, sin esperas.') AS headline,
         COALESCE(page.subtitle, 'Elige un servicio, consulta disponibilidad real y confirma sin esperas.') AS subtitle,
-        COALESCE(page.primary_color, '#C6A15B') AS primaryColor,
+        COALESCE(page.primary_color, '#C79A2B') AS primaryColor,
         COALESCE(page.public_note, 'Reserva online disponible todos los días.') AS publicNote,
         COALESCE(page.show_services, 1) AS showServices,
         COALESCE(page.show_professionals, 1) AS showProfessionals,
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
         bookingMaxDays: business.bookingMaxDays, allowClientCancellation: business.allowClientCancellation === 1,
         cancellationWindowHours: business.cancellationWindowHours, cancellationFeePercent: business.cancellationFeePercent,
         showPrices: business.showPrices === 1, showGallery: business.showGallery === 1, showReviews: business.showReviews === 1,
-        headline: business.headline, subtitle: business.subtitle, primaryColor: /^#2563eb$/i.test(business.primaryColor) ? "#C6A15B" : business.primaryColor,
+        headline: business.headline, subtitle: business.subtitle, primaryColor: barberAccent(business.primaryColor),
         publicNote: business.publicNote, showServices: business.showServices === 1,
         showProfessionals: business.showProfessionals === 1, showContact: business.showContact === 1,
         showPolicies: business.showPolicies === 1,

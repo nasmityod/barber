@@ -36,9 +36,9 @@ export const businessSettings = sqliteTable("business_settings", {
 
 export const bookingPageSettings = sqliteTable("booking_page_settings", {
   businessId: text("business_id").primaryKey(),
-  headline: text("headline").notNull().default("Tu mejor versión empieza aquí."),
+  headline: text("headline").notNull().default("Reserva tu silla. Sin llamadas, sin esperas."),
   subtitle: text("subtitle").notNull().default("Elige un servicio, consulta disponibilidad real y confirma sin esperas."),
-  primaryColor: text("primary_color").notNull().default("#C6A15B"),
+  primaryColor: text("primary_color").notNull().default("#C79A2B"),
   publicNote: text("public_note").notNull().default("Reserva online disponible todos los días."),
   showServices: integer("show_services", { mode: "boolean" }).notNull().default(true),
   showProfessionals: integer("show_professionals", { mode: "boolean" }).notNull().default(true),
